@@ -77,6 +77,14 @@ and reviewed. Pillow 12.3.0 is declared in the base requirements because the CPU
 video sampling tests import it. Verification: 62 passed, 4 GPU-dependent skipped;
 the remaining warning is the upstream Starlette/AnyIO deprecation.
 
+Upload stage — 2026-10-16: the dashboard now uploads MP4/MOV/AVI/MKV bytes instead
+of sending an assumed server filename. `POST /api/uploads` streams with a configurable
+250 MiB default cap, writes through a temporary file, validates OpenCV decoding,
+generates the stored name, hashes the file, records dimensions/FPS/duration in SQLite,
+and cleans up rejected uploads. Upload and replay remain separate so a recording can
+be analyzed repeatedly. Verification: 64 passed, 4 GPU-dependent skipped, plus the
+React production build; no detector-accuracy claim follows from upload validation.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

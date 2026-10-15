@@ -28,6 +28,8 @@ button:hover { filter: brightness(1.08); } button.danger { background: #7f1d1d; 
 dt { color: #8da1bb; font-size: 12px; margin-top: 10px; } dd { margin: 2px 0 0; }
 .error { color: #fecaca; border-color: #991b1b; margin-top: 16px; } footer { margin-top: 20px; }
 .replay-control { margin-top: 16px; } .replay-control form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.upload-row { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid #263650; padding-bottom: 16px; margin-bottom: 16px; }
+.upload-row > div:first-child { display: grid; gap: 4px; margin-right: auto; } .upload-row input[type="file"] { max-width: 360px; }
 .replay-control label { display: grid; gap: 5px; color: #8da1bb; font-size: 12px; } .replay-control label:first-of-type { flex: 1; min-width: 220px; }
 .replay-progress { border-top: 1px solid #263650; display: grid; grid-template-columns: 1fr minmax(180px, 320px); gap: 16px; margin-top: 16px; padding-top: 16px; }
 .replay-progress > div { display: grid; align-content: start; gap: 8px; } .replay-progress img { width: 100%; border-radius: 8px; border: 1px solid #45617d; }

@@ -29,10 +29,24 @@ function StatusBar({ status }) {
 }
 
 function ReplayControl({ job, onJob, onError }) {
-  const [sourceName, setSourceName] = useState("demo.mp4");
+  const [sourceName, setSourceName] = useState("");
   const [sampleFps, setSampleFps] = useState(5);
   const [gateLineY, setGateLineY] = useState("");
   const [zone, setZone] = useState([0, 0, 100, 100]);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [recordings, setRecordings] = useState([]);
+  const [uploadLimit, setUploadLimit] = useState(null);
+
+  async function loadRecordings() {
+    try {
+      const result = await request("/api/uploads");
+      setRecordings(result.recordings);
+      setUploadLimit(result.max_upload_bytes);
+    } catch (exception) { onError(exception.message); }
+  }
+
+  useEffect(() => { loadRecordings(); }, []);
 
   useEffect(() => {
     if (!job?.session_id || terminalReplayStates.has(job.status)) return undefined;
@@ -65,15 +79,35 @@ function ReplayControl({ job, onJob, onError }) {
     catch (exception) { onError(exception.message); }
   }
 
+  async function upload() {
+    if (!uploadFile) return;
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("file", uploadFile);
+      const result = await request("/api/uploads", { method: "POST", body });
+      setSourceName(result.source_name);
+      setUploadFile(null);
+      await loadRecordings();
+      onError("");
+    } catch (exception) { onError(exception.message); }
+    finally { setUploading(false); }
+  }
+
   return (
     <section className="replay-control panel">
+      <div className="upload-row">
+        <div><span className="eyebrow">1 / UPLOAD</span><strong>Select a local video</strong><span className="metadata">MP4, MOV, AVI or MKV{uploadLimit ? ` · up to ${Math.floor(uploadLimit / 1024 / 1024)} MiB` : ""}</span></div>
+        <input aria-label="Video file" type="file" accept=".mp4,.mov,.avi,.mkv,video/*" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} />
+        <button type="button" disabled={!uploadFile || uploading} onClick={upload}>{uploading ? "Validating…" : "Upload"}</button>
+      </div>
       <form onSubmit={start}>
-        <div><span className="eyebrow">REAL VIDEO REPLAY</span><strong>Decode a server-local recording</strong></div>
-        <label>File in recordings/<input value={sourceName} onChange={(event) => setSourceName(event.target.value)} required /></label>
+        <div><span className="eyebrow">2 / ANALYZE</span><strong>Configure the uploaded recording</strong></div>
+        <label>Recording<select value={sourceName} onChange={(event) => setSourceName(event.target.value)} required><option value="">Choose a recording</option>{recordings.map((recording) => <option key={recording.recording_id} value={recording.stored_name}>{recording.original_name} · {(recording.duration_ms / 1000).toFixed(1)}s</option>)}</select></label>
         <label>Sample FPS<input type="number" min="0.5" max="10" step="0.5" value={sampleFps} onChange={(event) => setSampleFps(event.target.value)} /></label>
         <label>Gate line from top (%)<input type="number" min="0" max="100" placeholder="optional" value={gateLineY} onChange={(event) => setGateLineY(event.target.value)} /></label>
         {zone.map((value, index) => <label key={index}>Zone {["left", "top", "right", "bottom"][index]} (%)<input type="number" min="0" max="100" value={value} onChange={(event) => setZone((current) => current.map((item, position) => position === index ? event.target.value : item))} /></label>)}
-        <button type="submit" disabled={job && !terminalReplayStates.has(job.status)}>Start replay</button>
+        <button type="submit" disabled={!sourceName || (job && !terminalReplayStates.has(job.status))}>Start analysis</button>
         {job && !terminalReplayStates.has(job.status) && <button type="button" className="secondary" onClick={stop}>Stop</button>}
       </form>
       {job && <div className="replay-progress">

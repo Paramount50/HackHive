@@ -350,3 +350,46 @@ def test_replay_api_starts_background_job_and_rejects_path_escape(tmp_path, monk
 
         escaped = client.post("/api/replays", json={"source_name": "../outside.avi"})
         assert escaped.status_code == 400
+
+
+def test_video_upload_streams_validates_and_registers_recording(tmp_path, monkeypatch) -> None:
+    from backend import main
+
+    source = tmp_path / "source.avi"
+    write_test_video(source)
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setattr(main, "recordings_root", upload_root)
+    monkeypatch.setattr(main, "max_upload_bytes", 10 * 1024 * 1024)
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/uploads",
+            files={"file": ("../../entrance.avi", source.read_bytes(), "video/x-msvideo")},
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["original_name"] == "entrance.avi"
+        assert body["source_name"].endswith(".avi")
+        assert body["frame_count"] == 10
+        assert body["width"] == 64 and body["height"] == 48
+        assert len(body["sha256"]) == 64
+        assert (upload_root / body["source_name"]).is_file()
+        listed = client.get("/api/uploads").json()["recordings"]
+        assert any(item["recording_id"] == body["recording_id"] for item in listed)
+
+
+def test_video_upload_rejects_unsupported_and_oversized_files(tmp_path, monkeypatch) -> None:
+    from backend import main
+
+    monkeypatch.setattr(main, "recordings_root", tmp_path / "uploads")
+    with TestClient(main.app) as client:
+        unsupported = client.post(
+            "/api/uploads", files={"file": ("notes.txt", b"not video", "text/plain")}
+        )
+        assert unsupported.status_code == 422
+        monkeypatch.setattr(main, "max_upload_bytes", 4)
+        oversized = client.post(
+            "/api/uploads", files={"file": ("large.avi", b"more-than-four", "video/x-msvideo")}
+        )
+        assert oversized.status_code == 413
+    assert not list((tmp_path / "uploads").glob("*"))

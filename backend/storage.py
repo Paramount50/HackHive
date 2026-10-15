@@ -73,7 +73,14 @@ CREATE TABLE IF NOT EXISTS reviews (
  request_key TEXT NOT NULL UNIQUE, event_id TEXT NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
  action TEXT NOT NULL, actor_label TEXT NOT NULL, note TEXT NOT NULL, created_utc_ms INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS recordings (
+ recording_id TEXT PRIMARY KEY, original_name TEXT NOT NULL, stored_name TEXT NOT NULL UNIQUE,
+ mime_type TEXT NOT NULL, byte_size INTEGER NOT NULL, sha256 TEXT NOT NULL,
+ duration_ms INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+ fps REAL NOT NULL, frame_count INTEGER NOT NULL, created_utc_ms INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_events_time ON events(start_utc_ms, last_observed_utc_ms);
+CREATE INDEX IF NOT EXISTS idx_recordings_created ON recordings(created_utc_ms DESC);
 """
 
 
@@ -328,6 +335,35 @@ class Store:
     def get_media(self, media_id: str) -> dict[str, Any] | None:
         row = self.connection.execute("SELECT * FROM media WHERE media_id=?", (media_id,)).fetchone()
         return dict(row) if row else None
+
+    def add_recording(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        self.connection.execute(
+            """INSERT INTO recordings
+            (recording_id,original_name,stored_name,mime_type,byte_size,sha256,duration_ms,
+             width,height,fps,frame_count,created_utc_ms)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                metadata["recording_id"], metadata["original_name"], metadata["stored_name"],
+                metadata["mime_type"], metadata["byte_size"], metadata["sha256"],
+                metadata["duration_ms"], metadata["width"], metadata["height"],
+                metadata["fps"], metadata["frame_count"], metadata["created_utc_ms"],
+            ),
+        )
+        self.connection.commit()
+        return metadata
+
+    def get_recording(self, recording_id: str) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            "SELECT * FROM recordings WHERE recording_id=?", (recording_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def list_recordings(self, limit: int = 50) -> list[dict[str, Any]]:
+        return [
+            dict(row) for row in self.connection.execute(
+                "SELECT * FROM recordings ORDER BY created_utc_ms DESC LIMIT ?", (limit,)
+            ).fetchall()
+        ]
 
     def add_grant(
         self,

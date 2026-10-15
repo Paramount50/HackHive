@@ -6,7 +6,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from .contracts import FixtureAnalysis, NaturalQueryRequest, QueryIntent, ReplayStartRequest, ReviewRequest, utc_now_ms
@@ -18,12 +18,14 @@ from .perception.pipeline import PerceptionPipeline, ScenePolicy, YoloDetector
 from .perception.rules import CandidateRules, Detection
 from .query import QueryClarification, parse_natural_query
 from .storage import Store
+from .uploads import UploadValidationError, save_recording_upload
 
 
 app = FastAPI(title="HackHive Local Event Desk", version="0.1.0")
 store = Store(Path("data") / "hackhive.sqlite")
 store.seed_camera()
 recordings_root = Path(os.environ.get("HACKHIVE_RECORDINGS_DIR", "recordings"))
+max_upload_bytes = int(os.environ.get("HACKHIVE_MAX_UPLOAD_MIB", "250")) * 1024 * 1024
 replay_manager = ReplayManager(recordings_root, Path("data") / "replay_frames")
 media_root = (Path("data") / "media").resolve()
 detector_weights = Path(os.environ.get("HACKHIVE_DETECTOR_WEIGHTS", "models/yolo11n.pt")).resolve()
@@ -130,6 +132,27 @@ def cameras() -> list[dict[str, Any]]:
         "SELECT camera_id,name,source_kind,display_timezone,policy_version FROM cameras"
     ).fetchall()
     return [dict(item) for item in row]
+
+
+@app.post("/api/uploads", status_code=201)
+async def upload_recording(file: UploadFile = File(...)) -> dict[str, Any]:
+    try:
+        metadata = await save_recording_upload(file, recordings_root, max_bytes=max_upload_bytes)
+    except UploadValidationError as exc:
+        status_code = 413 if "upload limit" in str(exc) else 422
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    try:
+        store.add_recording(metadata)
+    except Exception:
+        (recordings_root.resolve() / metadata["stored_name"]).unlink(missing_ok=True)
+        raise
+    return {**metadata, "source_name": metadata["stored_name"]}
+
+
+@app.get("/api/uploads")
+def recordings(limit: int = Query(default=50, ge=1, le=100)) -> dict[str, Any]:
+    items = store.list_recordings(limit)
+    return {"recordings": items, "count": len(items), "max_upload_bytes": max_upload_bytes}
 
 
 @app.post("/api/replays", status_code=202)
