@@ -10,6 +10,7 @@ h1 { font-size: 32px; margin: 4px 0 0; } h2 { margin: 4px 0 0; } h3 { margin-bot
 .status-bar { justify-content: space-between; gap: 16px; margin: 28px 0 12px; flex-wrap: wrap; }
 .status-bar > div { display: grid; gap: 4px; } .badge { border-radius: 999px; padding: 3px 8px; font-size: 11px; margin-left: 8px; }
 .replay { color: #bfdbfe; background: #1e3a5f; } .warning { color: #fbbf24; }
+.healthy { color: #86efac; }
 .policy { gap: 24px; color: #b8c5d6; flex-wrap: wrap; } .policy strong { color: #f1f5f9; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .8fr); gap: 16px; margin-top: 16px; }
 .section-heading { border-bottom: 1px solid #263650; padding-bottom: 16px; }

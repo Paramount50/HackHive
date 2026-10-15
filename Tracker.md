@@ -99,6 +99,12 @@ still decode compressed frames internally. One uncommitted console trial on
 0.797 s CPU and grab used 0.281 s wall / 0.453 s CPU. This single warm-cache run is
 directional only; repeat trials across the frozen videos before changing the default.
 
+Live-state stage — 2026-10-16: the dashboard policy banner and footer now derive from
+`GET /api/status` instead of claiming fixture mode during real replay. While a replay
+is active, status and incidents refresh every second so newly persisted events become
+visible before completion. Polling is bounded to the active job lifetime; SSE remains
+a later transport optimization.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

@@ -243,6 +243,11 @@ function App() {
     if (terminalReplayStates.has(job?.status)) loadEvents();
   }
 
+  async function loadStatus() {
+    try { setStatus(await request("/api/status")); }
+    catch (exception) { setError(exception.message); }
+  }
+
   async function loadEvents() {
     try {
       const query = category ? `?category=${encodeURIComponent(category)}` : "";
@@ -254,9 +259,19 @@ function App() {
   }
 
   useEffect(() => {
-    request("/api/status").then(setStatus).catch((exception) => setError(exception.message));
+    loadStatus();
     loadEvents();
   }, [category]);
+
+  useEffect(() => {
+    if (!replayJob || terminalReplayStates.has(replayJob.status)) return undefined;
+    setMessage("Analysis is running; newly recorded incidents appear below.");
+    const timer = window.setInterval(() => {
+      loadEvents();
+      loadStatus();
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [replayJob?.status, category]);
 
   async function runFixture(path = "/api/fixtures/run") {
     try {
@@ -289,7 +304,12 @@ function App() {
     <main>
       <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div><div className="header-actions"><button onClick={() => runFixture()}>Run analysis fixture</button><button onClick={() => runFixture("/api/fixtures/perception-run")}>Run perception fixture</button></div></header>
       <StatusBar status={status} />
-      <div className="policy panel"><strong>Fixture mode</strong><span>Simulated access grants</span><span>Timezone: Asia/Kolkata</span><span className="warning">Not real inference</span></div>
+      <div className="policy panel">
+        <strong>{status?.analysis?.mode ?? "Checking local models"}</strong>
+        <span>{status?.policy ?? "Loading policy"}</span>
+        <span>Timezone: {status?.timezone ?? "Asia/Kolkata"}</span>
+        <span className={status?.analysis?.degraded ? "warning" : "healthy"}>{status?.analysis?.degraded ? "Analysis unavailable · decode only" : "Local analysis available · operator review required"}</span>
+      </div>
       <ReplayControl job={replayJob} onJob={updateReplay} onError={setError} />
       <QueryPanel onSelect={selectEvent} onError={setError} />
       {error && <div className="error panel">{error}</div>}
@@ -304,7 +324,7 @@ function App() {
         </div>
         <EvidenceDrawer event={selected} onClose={() => setSelected(null)} />
       </section>
-      <footer>Local replay analysis requires detector weights. VLM review is not connected; candidate events remain unreviewed until a person checks them.</footer>
+      <footer>{status?.analysis?.message ?? "Checking local analysis availability."} Candidate events remain unreviewed until a person checks them.</footer>
     </main>
   );
 }
