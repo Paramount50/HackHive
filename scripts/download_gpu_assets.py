@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from backend.inference.smolvlm import MODEL_ID, MODEL_REVISION
+from backend.inference.smolvlm import model_config
 
 CHUNK = 8 * 1024 * 1024
 
@@ -98,13 +98,17 @@ def main():
         url = urllib.parse.urljoin(index, link.split("#")[0])
         digest = link.split("#sha256=")[1]
         download(url, Path("data/wheels") / filename, digest)
-    elif resource == "model":
-        url = f"https://huggingface.co/{MODEL_ID}/resolve/{MODEL_REVISION}/model.safetensors"
-        download(url, Path("models/smolvlm2-500m/model.safetensors"),
+    elif resource.startswith("model"):
+        variant = resource.removeprefix("model:") or "2.2b"
+        config = model_config(variant)
+        if variant == "2.2b":
+            raise SystemExit("Use smoke_vlm.py --model 2.2b --download for sharded 2.2B weights")
+        url = f"https://huggingface.co/{config.model_id}/resolve/{config.revision}/model.safetensors"
+        download(url, config.default_dir / "model.safetensors",
                  "b9bfd456c9472c0acd5719d6e514c4b859891af205ee1a736552fd3497b8b0c3")
         # Finish tokenizer/config downloads and write provenance through the normal setup command.
     else:
-        raise SystemExit("Usage: download_gpu_assets.py torch|model")
+        raise SystemExit("Usage: download_gpu_assets.py torch|model:500m")
 
 
 if __name__ == "__main__":

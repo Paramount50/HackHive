@@ -68,15 +68,32 @@ reviewable `aggression_fight`, `person_down`, and `crowd_gathering` candidates.
 Its scores are uncalibrated, not verified labels, and do not establish production
 accuracy or generalization. Tailgating remains geometry/policy based.
 
-From the HackHive directory, using a Python 3.12 virtual environment:
+From the HackHive directory, using a Python 3.12 virtual environment. The 2.2B
+candidate is fully wired, but the operational default remains 500M until a
+successful Kaggle/T4 runtime smoke promotes it; both variants remain selectable:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\smoke_vlm.py --hardware-only
-# One-time network setup (model revision is pinned in the adapter):
-.\.venv\Scripts\python.exe scripts\smoke_vlm.py --download
+# One-time network setup for either pinned variant:
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --model 500m --download
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --model 2.2b --download
 # Local-only inference after setup; keep models and videos on disk:
-.\.venv\Scripts\python.exe scripts\smoke_vlm.py --videos ..\sample_videos --requests 20
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --model 2.2b --videos ..\sample_videos --requests 20
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --model 500m --videos ..\sample_videos --requests 20
 ```
+
+For a fair structural/performance comparison, create and reuse one deterministic
+window manifest:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --model 500m --videos ..\sample_videos --requests 20 --window-manifest reports\comparison-windows.json
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --model 2.2b --videos ..\sample_videos --requests 20 --window-manifest reports\comparison-windows.json
+```
+
+Both reports then use the same source names and frame fractions; source hashes,
+selected frame indices, prompts, validation failures, timings, and peak memory
+remain separate per variant. This is not an accuracy comparison until the windows
+have human labels.
 
 The worker's runtime dependencies are in `requirements-gpu.txt`. CUDA availability
 and model-class imports have been verified with the pinned versions on this laptop;
@@ -84,8 +101,9 @@ model generation is a separate validation gate. Each run records its full
 `environment.txt`. Use the official PyTorch CUDA wheel index for Windows.
 
 If large full-file downloads stall, `scripts/download_gpu_assets.py torch` and
-`scripts/download_gpu_assets.py model` resume bounded chunks and verify official
-SHA256 digests. Run `smoke_vlm.py --download` afterward to finish metadata setup.
+`scripts/download_gpu_assets.py model:500m` resume bounded chunks and verify official
+SHA256 digests. The sharded 2.2B checkpoint is downloaded with
+`smoke_vlm.py --model 2.2b --download`.
 The CUDA wheel is retained under `data/wheels/` for offline reinstall; model weights
 stay under `models/`. Both are excluded from Git.
 
@@ -123,13 +141,16 @@ a recorded uniform fallback instead of failing the incident-verification request
 `HACKHIVE_VLM_SAMPLING` defaults to `swift`; set it to `uniform` before starting the
 service to run the same four-frame-budget baseline for an ablation.
 
-Admission requires at least 3 GiB free system RAM and 1800 MiB GPU budget, with the
-budget capped at 4 GiB and a 1 GiB free-VRAM reserve. This is a conservative startup
-gate, not a guarantee against competing applications. PyTorch allocator limits do
-not include all driver/context memory. The adapter uses bfloat16 + SDPA, one native
-512-pixel image tile per frame, and disables image splitting. This deliberately
-differs from the proposed 384-pixel seed to match the model's native image tokens.
-See the official [model card](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Video-Instruct)
+Admission requires at least 3 GiB free system RAM and a variant-specific GPU budget:
+1800 MiB for 500M and 6144 MiB for 2.2B (with an 8192 MiB allocator cap), with a 1 GiB free-VRAM reserve. The 2.2B
+floor is a conservative preflight based on the official model-card estimate of about
+5.2 GB GPU RAM for video inference, not a measured success claim. It targets the
+Kaggle T4 first and is not a claim that 2.2B fits the 6 GiB RTX 3060 Laptop.
+PyTorch allocator limits do not include all driver/context memory. The adapter uses
+bfloat16 + SDPA and disables image splitting; each variant uses its native longest
+edge (500M: 512, 2.2B: 384).
+See the official [2.2B model card](https://huggingface.co/HuggingFaceTB/SmolVLM2-2.2B-Instruct),
+[500M model card](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Video-Instruct)
 and [processor documentation](https://huggingface.co/docs/transformers/v4.57.1/model_doc/smolvlm).
 
 Without detector weights, replay is deliberately reported as `decode_only`; it does
@@ -138,8 +159,9 @@ VLM verification. Tailgating is disabled unless a gate line is supplied, and the
 crowd zone is the whole frame; configure geometry for each camera before interpreting
 those categories.
 
-Set `HACKHIVE_VLM_MODEL_DIR` if the pinned model is not stored at
-`models/smolvlm2-500m`. `GET /api/status` reports the VLM state,
+Set `HACKHIVE_VLM_VARIANT=500m` or `2.2b` to select a variant; the application
+defaults to 500M until the 2.2B runtime gate passes. Set `HACKHIVE_VLM_MODEL_DIR` to override its
+variant directory. `GET /api/status` reports the VLM state,
 queue depth, failures, and model provenance. A `ready` worker means the runtime loaded;
 it is not an accuracy claim.
 

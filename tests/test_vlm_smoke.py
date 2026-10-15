@@ -2,7 +2,9 @@ import cv2
 import numpy as np
 import pytest
 
-from backend.inference.smolvlm import SmolVLMWorker
+from backend.inference.smolvlm import (
+    SmolVLMWorker, model_config, validate_provenance, vision_sampling_compatibility,
+)
 from scripts.smoke_vlm import sample_window
 
 
@@ -32,3 +34,41 @@ def test_worker_rejects_missing_and_nonchronological_inputs_without_loading_gpu(
             worker.analyze([object()] * len(pts), pts)
     with pytest.raises(RuntimeError, match="load the worker"):
         worker.analyze([object()] * 4, [0, 1000, 2000, 3000])
+
+
+def test_vlm_variants_have_independent_pinned_configs_and_directories():
+    five_hundred = model_config("500m")
+    two_point_two = model_config("2.2b")
+    assert five_hundred.model_id.endswith("500M-Video-Instruct")
+    assert two_point_two.model_id.endswith("2.2B-Instruct")
+    assert five_hundred.revision != two_point_two.revision
+    assert five_hundred.default_dir != two_point_two.default_dir
+    assert two_point_two.minimum_budget_mib > five_hundred.minimum_budget_mib
+    assert two_point_two.budget_cap_mib > five_hundred.budget_cap_mib
+
+
+def test_invalid_vlm_variant_and_provenance_are_rejected():
+    with pytest.raises(ValueError, match="unsupported"):
+        model_config("fight")
+    config = model_config("2.2b")
+    validate_provenance({"model_id": config.model_id, "revision": config.revision}, "2.2b")
+    with pytest.raises(ValueError, match="provenance"):
+        validate_provenance({"model_id": config.model_id, "revision": "wrong"}, "2.2b")
+
+
+def test_swift_sampling_requires_expected_vision_internals():
+    class Compatible:
+        class Layer:
+            layer_norm1 = object()
+            self_attn = type("Attention", (), {"k_proj": object()})()
+
+        model = type("Core", (), {
+            "vision_model": type("Vision", (), {
+                "encoder": type("Encoder", (), {"layers": [Layer()]})()
+            })()
+        })()
+
+    assert vision_sampling_compatibility(Compatible()) == (True, None)
+    compatible, error = vision_sampling_compatibility(object())
+    assert compatible is False
+    assert "AttributeError" in error

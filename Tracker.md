@@ -185,6 +185,19 @@ downstream `invalid_model_output` failure through Pydantic; raw output is preser
 never silently deduplicated. Verification: the duplicate-parser regression now asserts
 this boundary explicitly.
 
+VLM variant upgrade: added selectable pinned configurations for the existing 500M
+checkpoint and SmolVLM2-2.2B-Instruct revision
+`482adb537c021c86670beed01cd58990d01e72e4`. The application and smoke CLI default to
+the 500M configuration until a successful Kaggle/T4 runtime smoke promotes 2.2B,
+while `--model 2.2b` remains available for explicit testing and same-window
+comparison. Provenance, model directory, variant, prompt, contract, timings, and
+hardware are recorded per run. The 2.2B admission floor is 6144 MiB and is not a
+claim that it fits the 6 GiB laptop; Kaggle T4 execution remains GPU-unverified.
+The official config exposes the expected SmolVLM vision path, and the adapter now
+records an explicit Swift Sampling compatibility check with uniform fallback through
+the existing service. No category or semantic-verdict changes were made; no accuracy
+claim is supported without labelled windows.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

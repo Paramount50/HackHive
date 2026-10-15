@@ -13,7 +13,7 @@ from .chat import HybridQueryEngine, MiniLMEmbedder, Qwen3LocalModel, SemanticRa
 from .contracts import Category, FixtureAnalysis, NaturalQueryRequest, QueryIntent, ReplayStartRequest, ReviewRequest, ReviewStatus, utc_now_ms
 from .ingest.manager import ReplayManager
 from .inference.service import SemanticInferenceService, SemanticJob
-from .inference.smolvlm import SmolVLMWorker
+from .inference.smolvlm import SmolVLMWorker, model_config
 from .media import MediaExporter
 from .orchestrator import EventOrchestrator
 from .perception.action import XClipActionClassifier
@@ -36,7 +36,10 @@ detector_weights = Path(os.environ.get("HACKHIVE_DETECTOR_WEIGHTS", "models/yolo
 action_model_dir = Path(os.environ.get("HACKHIVE_ACTION_MODEL_DIR", "models/xclip-base-patch32")).resolve()
 action_classifier: XClipActionClassifier | None = None
 action_classifier_lock = Lock()
-vlm_model_dir = Path(os.environ.get("HACKHIVE_VLM_MODEL_DIR", "models/smolvlm2-500m")).resolve()
+vlm_variant = os.environ.get("HACKHIVE_VLM_VARIANT", "500m").strip().lower()
+vlm_model_dir = Path(os.environ["HACKHIVE_VLM_MODEL_DIR"]).resolve() if os.environ.get(
+    "HACKHIVE_VLM_MODEL_DIR"
+) else None
 vlm_sampling_strategy = os.environ.get("HACKHIVE_VLM_SAMPLING", "swift").strip().lower()
 if vlm_sampling_strategy not in {"swift", "uniform"}:
     raise ValueError("HACKHIVE_VLM_SAMPLING must be swift or uniform")
@@ -79,12 +82,16 @@ def _persist_vlm_result(job: SemanticJob, result: dict[str, Any]) -> None:
 
 def get_vlm_service() -> SemanticInferenceService | None:
     global vlm_service
-    if not (vlm_model_dir / "hackhive-model.json").is_file():
+    if vlm_model_dir is not None:
+        model_dir = vlm_model_dir
+    else:
+        model_dir = model_config(vlm_variant).default_dir.resolve()
+    if not (model_dir / "hackhive-model.json").is_file():
         return None
     with vlm_service_lock:
         if vlm_service is None:
             vlm_service = SemanticInferenceService(
-                SmolVLMWorker(vlm_model_dir), _persist_vlm_result, max_pending=3,
+                SmolVLMWorker(model_dir, variant=vlm_variant), _persist_vlm_result, max_pending=3,
                 selection_strategy=vlm_sampling_strategy,
             )
             vlm_service.start()
@@ -151,12 +158,16 @@ def status() -> dict[str, Any]:
         and (action_model_dir / "model.safetensors").is_file()
     )
     semantic_status = vlm_service.snapshot() if vlm_service is not None else {
-        "state": "available" if (vlm_model_dir / "hackhive-model.json").is_file() else "not_configured",
+        "state": "available" if (
+            (vlm_model_dir or model_config(vlm_variant).default_dir.resolve())
+            / "hackhive-model.json"
+        ).is_file() else "not_configured",
         "error": None,
         "pending": 0,
         "counters": {},
         "model_id": None,
         "model_revision": None,
+        "variant": vlm_variant,
         "selection_strategy": vlm_sampling_strategy,
     }
     query_weights_available = (
