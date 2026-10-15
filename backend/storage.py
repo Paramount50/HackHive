@@ -138,6 +138,8 @@ class Store:
         end_utc_ms: int,
         analysis: FixtureAnalysis,
         candidate_key: str,
+        *,
+        start_pts_ms: int | None = None,
     ) -> str | None:
         now = utc_now_ms()
         window_id = str(uuid.uuid4())
@@ -182,7 +184,8 @@ class Store:
         policy = self.connection.execute(
             "SELECT policy_version,policy_json FROM stream_sessions WHERE session_id=?", (session_id,)
         ).fetchone()
-        decision = DecisionState.NEEDS_REVIEW if outcome == Category.SUSPECTED_TAILGATING else DecisionState.ACCEPTED
+        candidate_only = analysis.model_id.startswith("candidate://")
+        decision = DecisionState.NEEDS_REVIEW if outcome == Category.SUSPECTED_TAILGATING or candidate_only else DecisionState.ACCEPTED
         self.connection.execute(
             """INSERT INTO events
             (event_id,candidate_key,session_id,category,start_utc_ms,trigger_utc_ms,last_observed_utc_ms,
@@ -191,8 +194,9 @@ class Store:
              authorization_state,access_evidence_source,grant_ids_json,passage_ids_json,limitations_json,
              created_utc_ms,updated_utc_ms,metadata_expires_utc_ms)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (event_id, candidate_key, session_id, outcome, start_utc_ms, start_utc_ms, end_utc_ms,
-             start_utc_ms, now, decision, "active", analysis.summary, score,
+            (event_id, candidate_key, session_id, outcome, start_utc_ms, end_utc_ms, end_utc_ms,
+             start_utc_ms if start_pts_ms is None else start_pts_ms,
+             now, decision, "active", analysis.summary, score,
              "evidence_completeness_v1", json.dumps(predicates), "[]", json.dumps([window_id]),
              policy["policy_version"], policy["policy_json"],
              "unknown" if outcome == Category.SUSPECTED_TAILGATING else "not_applicable",
@@ -202,15 +206,21 @@ class Store:
         self.connection.commit()
         return event_id
 
-    def close_inactive_events(self, observed_utc_ms: int, merge_gap_ms: int = 5_000) -> list[str]:
+    def close_inactive_events(
+        self, observed_utc_ms: int, merge_gap_ms: int = 5_000, session_id: str | None = None
+    ) -> list[str]:
         """Close active incidents whose last evidence is older than the merge gap."""
         if merge_gap_ms < 0:
             raise ValueError("merge_gap_ms must not be negative")
         cutoff = observed_utc_ms - merge_gap_ms
+        sql = """SELECT event_id,start_utc_ms,start_pts_ms,last_observed_utc_ms FROM events
+                 WHERE lifecycle_state='active' AND last_observed_utc_ms < ?"""
+        params: list[Any] = [cutoff]
+        if session_id is not None:
+            sql += " AND session_id=?"
+            params.append(session_id)
         rows = self.connection.execute(
-            """SELECT event_id,start_utc_ms,start_pts_ms,last_observed_utc_ms FROM events
-               WHERE lifecycle_state='active' AND last_observed_utc_ms < ?""",
-            (cutoff,),
+            sql, params,
         ).fetchall()
         now = utc_now_ms()
         with self.connection:
@@ -228,15 +238,27 @@ class Store:
                 )
         return [row["event_id"] for row in rows]
 
-    def add_media(self, event_id: str, status: MediaStatus = MediaStatus.MISSING) -> str:
+    def get_event_row(self, event_id: str) -> dict[str, Any] | None:
+        row = self.connection.execute("SELECT * FROM events WHERE event_id=?", (event_id,)).fetchone()
+        return dict(row) if row else None
+
+    def add_media(
+        self,
+        event_id: str,
+        status: MediaStatus = MediaStatus.MISSING,
+        *,
+        kind: str = "keyframe",
+    ) -> str:
         media_id = str(uuid.uuid4())
         now = utc_now_ms()
         self.connection.execute(
             """INSERT INTO media
             (media_id,event_id,kind,relative_path,mime_type,status,coverage_start_utc_ms,coverage_end_utc_ms,
              requested_start_utc_ms,requested_end_utc_ms,expires_utc_ms)
-            VALUES (?,?,'keyframe',?,'image/jpeg',?,?,?,?,?,?)""",
-            (media_id, event_id, f"fixtures/{event_id}.jpg", status, now, now, now, now, now + 90 * 24 * 3600 * 1000),
+            VALUES (?,?,?,?,?,?, ?,?,?,?,?)""",
+            (media_id, event_id, kind, f"fixtures/{event_id}-{kind}",
+             "image/jpeg" if kind == "keyframe" else "video/mp4", status,
+             now, now, now, now, now + 90 * 24 * 3600 * 1000),
         )
         self.connection.commit()
         return media_id
