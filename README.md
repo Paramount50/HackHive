@@ -18,3 +18,19 @@ must not be committed.
 
 The API includes `/api/status`, `/api/events`, `/api/events/{id}`,
 `/api/events/{id}/reviews`, `/api/query`, and `/api/fixtures/run`.
+
+## React dashboard
+
+The dashboard is in `frontend/` and uses Vite with an API proxy for local
+development:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Start the FastAPI service first. Open http://127.0.0.1:5173 to use the React
+dashboard. It currently displays fixture incidents and their evidence metadata;
+real frames, clips, capture, and inference are intentionally not represented
+as complete.

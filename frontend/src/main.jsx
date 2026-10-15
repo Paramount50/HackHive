@@ -1,0 +1,132 @@
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import "./styles.css";
+
+const labels = {
+  person_down: "Person down",
+  crowd_gathering: "Crowd gathering",
+  suspected_tailgating: "Suspected tailgating"
+};
+
+async function request(path, options) {
+  const response = await fetch(path, options);
+  if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
+  return response.json();
+}
+
+function StatusBar({ status }) {
+  return (
+    <section className="status-bar panel">
+      <div><span className="eyebrow">SOURCE</span><strong>Fixture Gate</strong><span className="badge replay">REPLAY</span></div>
+      <div><span className="eyebrow">HEALTH</span><strong>{status?.source?.health ?? "loading"}</strong></div>
+      <div><span className="eyebrow">ANALYSIS</span><strong className="warning">Degraded · fixture</strong></div>
+      <div><span className="eyebrow">POLICY</span><strong>{status?.policy ?? "loading"}</strong></div>
+    </section>
+  );
+}
+
+function EventCard({ event, selected, onSelect, onReview }) {
+  const score = Math.round(event.confidence_score * 4);
+  return (
+    <article className={`event-card ${selected ? "selected" : ""}`} onClick={() => onSelect(event)}>
+      <div className="event-heading">
+        <span className={`category ${event.category}`}>{labels[event.category] ?? event.category}</span>
+        <span className="review-state">{event.review_status}</span>
+      </div>
+      <p>{event.summary}</p>
+      <div className="metadata">System decision: {event.decision_state} · Evidence score {score}/4 · uncalibrated</div>
+      <div className="actions">
+        <button onClick={(e) => { e.stopPropagation(); onReview(event, "confirm"); }}>Confirm</button>
+        <button className="danger" onClick={(e) => { e.stopPropagation(); onReview(event, "reject"); }}>Reject</button>
+      </div>
+    </article>
+  );
+}
+
+function EvidenceDrawer({ event, onClose }) {
+  if (!event) return <aside className="drawer panel empty">Select an incident to inspect its evidence.</aside>;
+  return (
+    <aside className="drawer panel">
+      <div className="drawer-header"><h2>Evidence</h2><button onClick={onClose}>Close</button></div>
+      <div className="evidence-placeholder">Full-scene fixture frame<br /><span>Media state is explicitly recorded, no real clip yet.</span></div>
+      <h3>{labels[event.category]}</h3>
+      <p>{event.summary}</p>
+      <dl>
+        <dt>System prediction</dt><dd>{event.decision_state}</dd>
+        <dt>Human review</dt><dd>{event.review_status}</dd>
+        <dt>Authorization</dt><dd>{event.authorization_state} · {event.access_evidence_source ?? "visual evidence only"}</dd>
+        <dt>Evidence score</dt><dd>{Math.round(event.confidence_score * 4)}/4 · uncalibrated</dd>
+      </dl>
+      <h3>Limitations</h3>
+      <ul>{event.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
+      <p className="metadata">Event ID: {event.event_id}</p>
+    </aside>
+  );
+}
+
+function App() {
+  const [status, setStatus] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [category, setCategory] = useState("");
+  const [message, setMessage] = useState("Loading recorded incidents…");
+  const [error, setError] = useState("");
+
+  async function loadEvents() {
+    try {
+      const query = category ? `?category=${encodeURIComponent(category)}` : "";
+      const result = await request(`/api/events${query}`);
+      setEvents(result.events);
+      setMessage(result.events.length ? `${result.count} recorded incident(s)` : "No matching recorded incidents.");
+      setError("");
+    } catch (exception) { setError(exception.message); }
+  }
+
+  useEffect(() => {
+    request("/api/status").then(setStatus).catch((exception) => setError(exception.message));
+    loadEvents();
+  }, [category]);
+
+  async function runFixture() {
+    try {
+      const result = await request("/api/fixtures/run", { method: "POST" });
+      setMessage(result.message);
+      await loadEvents();
+    } catch (exception) { setError(exception.message); }
+  }
+
+  async function review(event, action) {
+    try {
+      await request(`/api/events/${event.event_id}/reviews`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, actor_label: "operator", note: "Reviewed in React dashboard", request_key: `${event.event_id}-${action}` })
+      });
+      await loadEvents();
+      setSelected(null);
+    } catch (exception) { setError(exception.message); }
+  }
+
+  return (
+    <main>
+      <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div><button onClick={runFixture}>Run deterministic fixture</button></header>
+      <StatusBar status={status} />
+      <div className="policy panel"><strong>Fixture mode</strong><span>Simulated access grants</span><span>Timezone: Asia/Kolkata</span><span className="warning">Not real inference</span></div>
+      {error && <div className="error panel">{error}</div>}
+      <section className="workspace">
+        <div className="feed panel">
+          <div className="section-heading"><div><span className="eyebrow">INCIDENT TIMELINE</span><h2>Recorded incidents</h2></div>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}><option value="">All categories</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          </div>
+          <p className="metadata">{message}</p>
+          {events.map((event) => <EventCard key={event.event_id} event={event} selected={selected?.event_id === event.event_id} onSelect={setSelected} onReview={review} />)}
+          {!events.length && <div className="empty-state">No matching recorded incidents.</div>}
+        </div>
+        <EvidenceDrawer event={selected} onClose={() => setSelected(null)} />
+      </section>
+      <footer>Coverage is limited to recorded fixture sessions. Real capture, model inference, and media clips are not connected yet.</footer>
+    </main>
+  );
+}
+
+createRoot(document.getElementById("root")).render(<App />);
