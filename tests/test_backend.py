@@ -95,6 +95,30 @@ def test_review_is_idempotent_and_separate_from_system_decision() -> None:
     assert len(result["reviews"]) == 1
 
 
+def test_event_lookup_and_review_do_not_depend_on_list_limit() -> None:
+    store = make_store()
+    session = store.create_session(1_000)
+    analysis = FixtureAnalysis(
+        outcome="person_down",
+        summary="A person remains prone.",
+        observations=[{"predicate": "prone_posture", "supported": True}],
+    )
+    oldest = None
+    for index in range(105):
+        event_id = store.record_analysis(
+            session, 2_000 + index * 10, 2_005 + index * 10,
+            analysis, f"limit-event-{index}",
+        )
+        oldest = oldest or event_id
+    assert oldest not in {item["event_id"] for item in store.list_events(QueryIntent(limit=100))}
+    assert store.get_event(oldest)["event_id"] == oldest
+    reviewed = store.review(
+        oldest,
+        ReviewRequest(action="confirm", actor_label="tester", request_key="oldest-review"),
+    )
+    assert reviewed["review_status"] == "confirmed"
+
+
 def test_query_uses_half_open_time_filters() -> None:
     store = make_store()
     session = store.create_session(1_000)

@@ -71,6 +71,12 @@ The recorded pilot is in [action-pilot-20261016.json](reports/action-pilot-20261
 This is an unlabelled smoke/integration result, not verified accuracy or evidence
 of generalization.
 
+Audit correctness stage — 2026-10-16: event detail and review lookup now query the
+requested event ID directly, so events outside the newest 100 can still be opened
+and reviewed. Pillow 12.3.0 is declared in the base requirements because the CPU
+video sampling tests import it. Verification: 62 passed, 4 GPU-dependent skipped;
+the remaining warning is the upstream Starlette/AnyIO deprecation.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

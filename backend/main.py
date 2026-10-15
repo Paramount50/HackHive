@@ -253,16 +253,10 @@ def events(
 
 @app.get("/api/events/{event_id}")
 def event(event_id: str) -> dict[str, Any]:
-    result = store.list_events(QueryIntent(limit=100))
-    for item in result:
-        if item["event_id"] == event_id:
-            item["media"] = [
-                dict(row) for row in store.connection.execute(
-                    "SELECT * FROM media WHERE event_id=?", (event_id,)
-                ).fetchall()
-            ]
-            return item
-    raise HTTPException(status_code=404, detail="event not found")
+    result = store.get_event(event_id, include_media=True)
+    if result is None:
+        raise HTTPException(status_code=404, detail="event not found")
+    return result
 
 
 @app.get("/api/media/{media_id}")

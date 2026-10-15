@@ -262,6 +262,30 @@ class Store:
         row = self.connection.execute("SELECT * FROM events WHERE event_id=?", (event_id,)).fetchone()
         return dict(row) if row else None
 
+    def get_event(self, event_id: str, *, include_media: bool = False) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode
+               FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
+               JOIN cameras c ON c.camera_id=s.camera_id WHERE e.event_id=?""",
+            (event_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        review, reviews = self._review_projection(event_id)
+        item = dict(row)
+        item["review_status"] = review
+        item["reviews"] = reviews
+        item["predicates"] = json.loads(row["predicates_json"])
+        item["limitations"] = json.loads(row["limitations_json"])
+        if include_media:
+            item["media"] = [
+                dict(media) for media in self.connection.execute(
+                    "SELECT * FROM media WHERE event_id=? ORDER BY coverage_start_utc_ms,media_id",
+                    (event_id,),
+                ).fetchall()
+            ]
+        return item
+
     def add_media(
         self,
         event_id: str,
@@ -420,4 +444,7 @@ class Store:
                  request.actor_label, request.note, utc_now_ms()),
             )
             self.connection.commit()
-        return next(item for item in self.list_events(QueryIntent(limit=100)) if item["event_id"] == event_id)
+        result = self.get_event(event_id)
+        if result is None:
+            raise KeyError(event_id)
+        return result
