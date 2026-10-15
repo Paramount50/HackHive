@@ -33,6 +33,7 @@ function StatusBar({ status }) {
 function ReplayControl({ job, onJob, onError }) {
   const [sourceName, setSourceName] = useState("");
   const [sampleFps, setSampleFps] = useState(5);
+  const [decodeStrategy, setDecodeStrategy] = useState("sequential");
   const [gateLineY, setGateLineY] = useState("");
   const [zone, setZone] = useState([0, 0, 100, 100]);
   const [uploadFile, setUploadFile] = useState(null);
@@ -67,6 +68,7 @@ function ReplayControl({ job, onJob, onError }) {
         body: JSON.stringify({
           source_name: sourceName,
           sample_fps: Number(sampleFps),
+          decode_strategy: decodeStrategy,
           pace: true,
           ...(gateLineY === "" ? {} : { gate_line_y: Number(gateLineY) / 100 }),
           zone: zone.map((value) => Number(value) / 100)
@@ -107,13 +109,14 @@ function ReplayControl({ job, onJob, onError }) {
         <div><span className="eyebrow">2 / ANALYZE</span><strong>Configure the uploaded recording</strong></div>
         <label>Recording<select value={sourceName} onChange={(event) => setSourceName(event.target.value)} required><option value="">Choose a recording</option>{recordings.map((recording) => <option key={recording.recording_id} value={recording.stored_name}>{recording.original_name} · {(recording.duration_ms / 1000).toFixed(1)}s</option>)}</select></label>
         <label>Sample FPS<input type="number" min="0.5" max="10" step="0.5" value={sampleFps} onChange={(event) => setSampleFps(event.target.value)} /></label>
+        <label>Decoder<select value={decodeStrategy} onChange={(event) => setDecodeStrategy(event.target.value)}><option value="sequential">Sequential baseline</option><option value="grab">Grab/retrieve trial</option></select></label>
         <label>Gate line from top (%)<input type="number" min="0" max="100" placeholder="optional" value={gateLineY} onChange={(event) => setGateLineY(event.target.value)} /></label>
         {zone.map((value, index) => <label key={index}>Zone {["left", "top", "right", "bottom"][index]} (%)<input type="number" min="0" max="100" value={value} onChange={(event) => setZone((current) => current.map((item, position) => position === index ? event.target.value : item))} /></label>)}
         <button type="submit" disabled={!sourceName || (job && !terminalReplayStates.has(job.status))}>Start analysis</button>
         {job && !terminalReplayStates.has(job.status) && <button type="button" className="secondary" onClick={stop}>Stop</button>}
       </form>
       {job && <div className="replay-progress">
-        <div><span className={`job-state ${job.status}`}>{job.status}</span><strong>{job.frame_count} sampled frame(s) · {job.analysis}</strong><span className="metadata">{job.source_name}</span></div>
+        <div><span className={`job-state ${job.status}`}>{job.status}</span><strong>{job.frame_count} sampled frame(s) · {job.analysis}</strong><span className="metadata">{job.source_name} · {job.decode_strategy} decoder</span></div>
         {job.latest_frame && <img src={`${job.latest_frame.frame_url}?v=${job.frame_count}`} alt="Latest sampled replay frame" />}
         {job.analysis_message && <span className="metadata">{job.analysis_message}</span>}
         {job.error && <span className="error-text">{job.error}</span>}

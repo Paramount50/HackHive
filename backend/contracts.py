@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -123,6 +123,7 @@ class ReplayStartRequest(BaseModel):
     source_name: str = Field(min_length=1, max_length=240)
     sample_fps: float = Field(default=5.0, ge=0.5, le=10.0)
     pace: bool = True
+    decode_strategy: Literal["sequential", "grab"] = "sequential"
     max_frames: int | None = Field(default=None, ge=1, le=10_000)
     gate_line_y: float | None = Field(default=None, ge=0, le=1)
     zone: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)

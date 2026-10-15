@@ -90,6 +90,15 @@ media ID and playable-evidence flag without leaking paths. Timeline cards render
 thumbnail or an explicit unavailable state before the evidence drawer is opened. The
 React category vocabulary now matches all six backend incident categories.
 
+Sampling experiment stage — 2026-10-16: sequential `read()` remains the default
+correctness baseline; replay can opt into OpenCV `grab/retrieve`, and
+`scripts/benchmark_sampling.py` compares wall time, CPU time, emitted count, and PTS
+sequence on the same file. No general speedup is claimed because codec backends may
+still decode compressed frames internally. One uncommitted console trial on
+`v001_converted 3.avi` emitted the same 33 PTS values: sequential used 0.766 s wall /
+0.797 s CPU and grab used 0.281 s wall / 0.453 s CPU. This single warm-cache run is
+directional only; repeat trials across the frozen videos before changing the default.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

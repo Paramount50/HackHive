@@ -20,6 +20,7 @@ class ReplayJob:
     started_utc_ms: int
     sample_fps: float
     pace: bool
+    decode_strategy: str
     max_frames: int | None
     buffer: BoundedFrameBuffer
     status: str = "starting"
@@ -71,6 +72,7 @@ class ReplayManager:
         sample_fps: float,
         pace: bool,
         max_frames: int | None,
+        decode_strategy: str = "sequential",
         on_frame: FrameHandler | None = None,
         on_finish: FinishHandler | None = None,
         analysis_message: str | None = None,
@@ -89,6 +91,7 @@ class ReplayManager:
                 started_utc_ms=started_utc_ms,
                 sample_fps=sample_fps,
                 pace=pace,
+                decode_strategy=decode_strategy,
                 max_frames=max_frames,
                 buffer=BoundedFrameBuffer(self.context_frames),
                 on_frame=on_frame,
@@ -117,6 +120,7 @@ class ReplayManager:
                 asset_dir=self.assets_root / job.session_id,
                 sample_fps=job.sample_fps,
                 pace=job.pace,
+                decode_strategy=job.decode_strategy,
                 sleep=job.stop.wait,
             )
             with self._lock:
@@ -153,6 +157,7 @@ class ReplayManager:
                 "source_name": job.source_name,
                 "status": job.status,
                 "frame_count": job.frame_count,
+                "decode_strategy": job.decode_strategy,
                 "analysis": "active" if job.on_frame is not None else "decode_only",
                 "analysis_message": job.analysis_message,
                 "events_created": len(job.event_ids),

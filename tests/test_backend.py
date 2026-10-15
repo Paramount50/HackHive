@@ -27,7 +27,7 @@ def write_test_video(path: Path, frame_count: int = 10) -> None:
     )
     assert writer.isOpened()
     for index in range(frame_count):
-        frame = np.full((48, 64, 3), index * 20, dtype=np.uint8)
+        frame = np.full((48, 64, 3), (index * 20) % 256, dtype=np.uint8)
         writer.write(frame)
     writer.release()
 
@@ -255,6 +255,22 @@ def test_real_video_replay_rejects_missing_file(tmp_path) -> None:
         pass
     else:
         raise AssertionError("missing video should be rejected")
+
+
+def test_grab_sampling_matches_sequential_frame_count_and_timestamps(tmp_path) -> None:
+    video = tmp_path / "source.avi"
+    write_test_video(video, frame_count=30)
+    outputs = {}
+    for strategy in ("sequential", "grab"):
+        replay = VideoReplay(
+            video, "cam-1", f"session-{strategy}", 1_000,
+            tmp_path / strategy, sample_fps=2, decode_strategy=strategy,
+        )
+        outputs[strategy] = list(replay.frames())
+    assert [packet.source_pts_ms for packet in outputs["grab"]] == [
+        packet.source_pts_ms for packet in outputs["sequential"]
+    ]
+    assert len(outputs["grab"]) == len(outputs["sequential"])
 
 
 def test_replay_manager_decodes_in_background_and_reports_latest_frame(tmp_path) -> None:

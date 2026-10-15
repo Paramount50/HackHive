@@ -88,6 +88,7 @@ class VideoReplay:
         asset_dir: str | Path,
         sample_fps: float = 5.0,
         pace: bool = False,
+        decode_strategy: str = "sequential",
         sleep: Callable[[float], None] | None = None,
     ) -> None:
         self.path = Path(path)
@@ -95,12 +96,15 @@ class VideoReplay:
             raise FileNotFoundError(f"video file not found: {self.path}")
         if sample_fps <= 0:
             raise ValueError("sample_fps must be positive")
+        if decode_strategy not in {"sequential", "grab"}:
+            raise ValueError("decode_strategy must be sequential or grab")
         self.camera_id = camera_id
         self.session_id = session_id
         self.session_started_utc_ms = session_started_utc_ms
         self.asset_dir = Path(asset_dir)
         self.sample_fps = sample_fps
         self.pace = pace
+        self.decode_strategy = decode_strategy
         self._sleep = sleep
 
     @staticmethod
@@ -141,7 +145,11 @@ class VideoReplay:
         self.asset_dir.mkdir(parents=True, exist_ok=True)
         try:
             while True:
-                ok, image = capture.read()
+                if self.decode_strategy == "grab":
+                    ok = capture.grab()
+                    image = None
+                else:
+                    ok, image = capture.read()
                 if not ok:
                     break
                 reported_pts = float(capture.get(cv2.CAP_PROP_POS_MSEC))
@@ -157,6 +165,11 @@ class VideoReplay:
                     continue
                 while next_sample_pts <= source_pts_ms + 0.5:
                     next_sample_pts += interval_ms
+
+                if image is None:
+                    ok, image = capture.retrieve()
+                    if not ok:
+                        raise ValueError(f"unable to retrieve sampled frame at {source_pts_ms} ms")
 
                 if first_pts is None:
                     first_pts = source_pts_ms

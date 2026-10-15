@@ -225,6 +225,7 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
             started_utc_ms=started,
             sample_fps=request.sample_fps,
             pace=request.pace,
+            decode_strategy=request.decode_strategy,
             max_frames=request.max_frames,
             on_frame=on_frame,
             on_finish=on_finish,
