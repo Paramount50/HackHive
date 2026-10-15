@@ -47,7 +47,13 @@ def _time_range(text: str, request: NaturalQueryRequest) -> tuple[int | None, in
     now_ms = request.now_utc_ms if request.now_utc_ms is not None else utc_now_ms()
     now = datetime.fromtimestamp(now_ms / 1000, timezone.utc)
     local_now = now.astimezone(zone)
-    if "today" in text:
+    if "this morning" in text:
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        noon = start + timedelta(hours=12)
+        end = min(local_now, noon)
+        if end <= start:
+            end = start + timedelta(minutes=1)
+    elif "today" in text:
         start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
     elif "yesterday" in text:
@@ -66,7 +72,7 @@ def _time_range(text: str, request: NaturalQueryRequest) -> tuple[int | None, in
 
 
 def parse_natural_query(request: NaturalQueryRequest) -> QueryIntent:
-    text = " ".join(request.question.lower().split())
+    text = " ".join(request.question.lower().replace("-", " ").split())
     categories = [category for category, terms in CATEGORY_TERMS.items() if any(term in text for term in terms)]
     unsupported = [term for term in ("weapon", "gun", "knife") if term in text]
     if unsupported and not categories:
