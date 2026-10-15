@@ -155,13 +155,24 @@ class Store:
             self.connection.commit()
             return None
         existing = self.connection.execute(
-            "SELECT event_id FROM events WHERE candidate_key=?", (candidate_key,)
+            "SELECT event_id,lifecycle_state,window_ids_json FROM events WHERE candidate_key=?",
+            (candidate_key,),
         ).fetchone()
+        if existing and existing["lifecycle_state"] == "ended":
+            candidate_key = f"{candidate_key}:{start_utc_ms}"
+            existing = self.connection.execute(
+                "SELECT event_id,lifecycle_state,window_ids_json FROM events WHERE candidate_key=?",
+                (candidate_key,),
+            ).fetchone()
         if existing:
+            window_ids = json.loads(existing["window_ids_json"])
+            if window_id not in window_ids:
+                window_ids.append(window_id)
             self.connection.execute(
-                """UPDATE events SET last_observed_utc_ms=?, end_utc_ms=?, updated_utc_ms=?,
+                """UPDATE events SET last_observed_utc_ms=?, end_utc_ms=NULL, end_pts_ms=NULL,
+                lifecycle_state='active', updated_utc_ms=?,
                 window_ids_json=? WHERE event_id=?""",
-                (end_utc_ms, end_utc_ms, now, json.dumps([window_id]), existing["event_id"]),
+                (end_utc_ms, now, json.dumps(window_ids), existing["event_id"]),
             )
             self.connection.commit()
             return existing["event_id"]
@@ -190,6 +201,32 @@ class Store:
         )
         self.connection.commit()
         return event_id
+
+    def close_inactive_events(self, observed_utc_ms: int, merge_gap_ms: int = 5_000) -> list[str]:
+        """Close active incidents whose last evidence is older than the merge gap."""
+        if merge_gap_ms < 0:
+            raise ValueError("merge_gap_ms must not be negative")
+        cutoff = observed_utc_ms - merge_gap_ms
+        rows = self.connection.execute(
+            """SELECT event_id,start_utc_ms,start_pts_ms,last_observed_utc_ms FROM events
+               WHERE lifecycle_state='active' AND last_observed_utc_ms < ?""",
+            (cutoff,),
+        ).fetchall()
+        now = utc_now_ms()
+        with self.connection:
+            for row in rows:
+                duration_ms = max(0, row["last_observed_utc_ms"] - row["start_utc_ms"])
+                self.connection.execute(
+                    """UPDATE events SET lifecycle_state='ended', end_utc_ms=?, end_pts_ms=?,
+                       updated_utc_ms=? WHERE event_id=? AND lifecycle_state='active'""",
+                    (
+                        row["last_observed_utc_ms"],
+                        row["start_pts_ms"] + duration_ms,
+                        now,
+                        row["event_id"],
+                    ),
+                )
+        return [row["event_id"] for row in rows]
 
     def add_media(self, event_id: str, status: MediaStatus = MediaStatus.READY) -> str:
         media_id = str(uuid.uuid4())

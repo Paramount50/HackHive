@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from time import monotonic, sleep
 
@@ -50,7 +51,30 @@ def test_repeated_observation_merges_into_one_event() -> None:
     first = store.record_analysis(session, 2_000, 3_000, analysis, "person-1")
     second = store.record_analysis(session, 3_000, 4_000, analysis, "person-1")
     assert first == second
-    assert len(store.list_events(QueryIntent())) == 1
+    result = store.list_events(QueryIntent())
+    assert len(result) == 1
+    assert result[0]["lifecycle_state"] == "active"
+    assert result[0]["end_utc_ms"] is None
+    assert len(json.loads(result[0]["window_ids_json"])) == 2
+
+
+def test_quiet_gap_closes_event_and_recurrence_gets_new_id() -> None:
+    store = make_store()
+    session = store.create_session(1_000)
+    analysis = FixtureAnalysis(
+        outcome="person_down",
+        summary="A person remains prone near the doorway.",
+        observations=[{"predicate": "prone_posture", "supported": True}],
+    )
+    first = store.record_analysis(session, 2_000, 3_000, analysis, "person-quiet")
+    assert store.close_inactive_events(observed_utc_ms=8_001, merge_gap_ms=5_000) == [first]
+    closed = next(item for item in store.list_events(QueryIntent()) if item["event_id"] == first)
+    assert closed["lifecycle_state"] == "ended"
+    assert closed["end_utc_ms"] == 3_000
+
+    second = store.record_analysis(session, 9_000, 10_000, analysis, "person-quiet")
+    assert second != first
+    assert len(store.list_events(QueryIntent())) == 2
 
 
 def test_review_is_idempotent_and_separate_from_system_decision() -> None:
