@@ -23,6 +23,13 @@ dependency/model downloads at this stage. No detection accuracy, model quality o
 real-time performance is established. Replay integration, ByteTrack, scheduler audit
 fairness, and deterministic policy application remain future stages.
 
+Stage 3: candidate rules now reset sustained-posture/count evidence after an observed
+break or a gap longer than 1500 ms; crowd counting uses unique tracks. Posture uses
+pixel aspect ratio on non-square sources. Later gate-crossing pairs are no longer
+hidden behind the first pair in history. All 46 tests pass, including four added
+regressions. This checks deterministic behavior, not detector accuracy; tracking
+fragmentation, ByteTrack integration, and policy-specific tuning remain unvalidated.
+
 Updated: 2026-10-15. This tracker records evidence, not intentions. The first CPU-only backend slice is implemented; real model and performance work remain unrun.
 
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).

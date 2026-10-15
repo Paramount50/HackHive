@@ -158,6 +158,7 @@ class PerceptionPipeline:
                 center_y=center_y,
                 width=(box.x2 - box.x1) / packet.width,
                 height=(box.y2 - box.y1) / packet.height,
+                pixel_aspect_ratio=(box.x2 - box.x1) / max(1e-6, box.y2 - box.y1),
                 in_zone=zone_x1 <= center_x <= zone_x2 and zone_y1 <= center_y <= zone_y2,
                 side=side,
                 direction=direction,

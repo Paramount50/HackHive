@@ -57,3 +57,10 @@ def test_track_expires_after_configured_misses() -> None:
         pipeline.process(packet(index, index * 500))
     later = pipeline.process(packet(4, 2_000))[0][0].track_id
     assert later != first
+
+
+def test_posture_uses_pixel_aspect_ratio_on_widescreen_source():
+    pipeline = PerceptionPipeline(ScriptedDetector([[person(10, 10, 130, 110)]]))
+    frame = FramePacket("cam-1", "session-1", 0, 0, 10000, 1920, 1080, "frame.jpg", False)
+    detections, _ = pipeline.process(frame)
+    assert detections[0].horizontal_posture  # 120/100, not (120/1920)/(100/1080)
