@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event, Lock, Thread
-from time import monotonic
+from time import monotonic, perf_counter
 from typing import Any, Callable, Protocol
 import uuid
 
@@ -18,8 +18,8 @@ class SemanticJob:
     camera_id: str
     candidate_key: str
     expected_outcome: str
-    image_paths: tuple[str, str, str, str]
-    source_pts_ms: tuple[int, int, int, int]
+    image_paths: tuple[str, ...]
+    source_pts_ms: tuple[int, ...]
 
 
 class VisualWorker(Protocol):
@@ -64,10 +64,10 @@ class SemanticInferenceService:
         self._thread.start()
 
     def submit(self, job: SemanticJob) -> bool:
-        if len(set(job.source_pts_ms)) != 4 or any(
+        if len(job.source_pts_ms) < 4 or len(job.image_paths) != len(job.source_pts_ms) or any(
             right <= left for left, right in zip(job.source_pts_ms, job.source_pts_ms[1:])
         ):
-            raise ValueError("semantic job requires four distinct chronological frames")
+            raise ValueError("semantic job requires at least four distinct chronological frames")
         if self.state == "failed":
             return False
         request_id = str(uuid.uuid4())
@@ -131,7 +131,48 @@ class SemanticInferenceService:
             for path in job.image_paths:
                 with Image.open(Path(path)) as image:
                     images.append(image.convert("RGB"))
-            result = self.worker.analyze(images, list(job.source_pts_ms))
+            selection_started = perf_counter()
+            selection_error = None
+            if len(images) == 4:
+                selected_indices = list(range(4))
+                strategy = "all"
+            elif hasattr(self.worker, "select_frames"):
+                gaps = [right - left for left, right in zip(job.source_pts_ms, job.source_pts_ms[1:])]
+                mean_gap = sum(gaps) / len(gaps)
+                regular = all(abs(gap - mean_gap) <= max(1, mean_gap * 0.25) for gap in gaps)
+                try:
+                    if not regular:
+                        raise ValueError("candidate timestamps are too irregular for Taylor sampling")
+                    selected_indices = self.worker.select_frames(images, target_frames=4)
+                    if (
+                        len(selected_indices) != 4
+                        or selected_indices != sorted(set(selected_indices))
+                        or any(index < 0 or index >= len(images) for index in selected_indices)
+                    ):
+                        raise ValueError("selector returned invalid frame indices")
+                except Exception as exc:
+                    selection_error = f"{type(exc).__name__}: {exc}"[:300]
+                    selected_indices = [round(index * (len(images) - 1) / 3) for index in range(4)]
+                    strategy = "uniform_fallback"
+                else:
+                    strategy = "swift_latent_taylor_v1"
+            else:
+                selected_indices = [round(index * (len(images) - 1) / 3) for index in range(4)]
+                strategy = "uniform_fallback"
+            selected_images = [images[index] for index in selected_indices]
+            selected_pts = [job.source_pts_ms[index] for index in selected_indices]
+            selection_ms = (perf_counter() - selection_started) * 1000
+            result = self.worker.analyze(selected_images, selected_pts)
+            result["selection"] = {
+                "strategy": strategy,
+                "candidate_frame_count": len(images),
+                "selected_indices": selected_indices,
+                "selected_source_pts_ms": selected_pts,
+                "target_frames": 4,
+                "taylor_order": 3 if strategy == "swift_latent_taylor_v1" else None,
+                "latency_ms": selection_ms,
+                "error": selection_error,
+            }
             self.on_result(job, result)
             if result.get("status") != "completed":
                 request.status = RequestStatus.FAILED

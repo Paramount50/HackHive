@@ -79,6 +79,56 @@ def test_semantic_service_runs_one_bounded_background_worker(tmp_path) -> None:
         service.close()
 
 
+def test_semantic_service_uses_worker_frame_selector(tmp_path) -> None:
+    paths = []
+    for index in range(6):
+        path = tmp_path / f"pool-{index}.jpg"
+        Image.new("RGB", (32, 24), (index * 30, 0, 0)).save(path)
+        paths.append(str(path))
+
+    class SelectingWorker:
+        def load(self):
+            return {"model_id": "fake-vlm", "revision": "test"}
+
+        def select_frames(self, images, target_frames=4):
+            assert len(images) == 6
+            assert target_frames == 4
+            return [0, 2, 4, 5]
+
+        def analyze(self, images, pts_ms):
+            assert pts_ms == [0, 1_000, 2_000, 2_500]
+            return {"status": "completed", "observation": supported_observation()}
+
+    completed = Event()
+    results = []
+    service = SemanticInferenceService(
+        SelectingWorker(), lambda job, result: (results.append(result), completed.set())
+    )
+    service.start()
+    try:
+        job = SemanticJob(
+            event_id="event-pool",
+            camera_id="cam-1",
+            candidate_key="candidate-pool",
+            expected_outcome="person_down",
+            image_paths=tuple(paths),
+            source_pts_ms=(0, 500, 1_000, 1_500, 2_000, 2_500),
+        )
+        assert service.submit(job)
+        assert completed.wait(2)
+        selection = results[0]["selection"]
+        assert selection["strategy"] == "swift_latent_taylor_v1"
+        assert selection["candidate_frame_count"] == 6
+        assert selection["selected_indices"] == [0, 2, 4, 5]
+        assert selection["selected_source_pts_ms"] == [0, 1_000, 2_000, 2_500]
+        assert selection["target_frames"] == 4
+        assert selection["taylor_order"] == 3
+        assert selection["latency_ms"] >= 0
+        assert selection["error"] is None
+    finally:
+        service.close()
+
+
 def test_store_attaches_supported_vlm_result_without_auto_accepting() -> None:
     store = Store()
     session = store.create_session(10_000)

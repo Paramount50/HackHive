@@ -263,6 +263,7 @@ class Store:
             "expected_outcome": job.expected_outcome,
             "observation": observation.model_dump() if observation else None,
             "raw_output": str(result.get("raw_output", ""))[:8_000],
+            "selection": result.get("selection"),
         }
         status = "completed" if observation is not None else "failed"
         with self.connection:

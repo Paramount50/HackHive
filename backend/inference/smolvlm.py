@@ -9,6 +9,7 @@ from time import perf_counter
 
 from .contracts import PREDICATES, generation_schema, parse_observation
 from .hardware import gpu_budget_mib, hardware_report
+from .swift_sampling import select_temporal_surprises
 
 MODEL_ID = "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"
 MODEL_REVISION = "7b375e1b73b11138ff12fe22c8f2822d8fe03467"
@@ -99,6 +100,53 @@ class SmolVLMWorker:
                 "hardware_before_load": report,
             }
             return self.metadata
+
+    def select_frames(self, images: list, *, target_frames: int = 4) -> list[int]:
+        """Select temporal surprises from layer-0 vision-attention key features."""
+        if self.model is None or self.processor is None:
+            raise RuntimeError("load the worker before selecting frames")
+        if len(images) < target_frames:
+            raise ValueError("candidate pool is smaller than the requested frame budget")
+        if len(images) == target_frames:
+            return list(range(target_frames))
+        with self.lock:
+            import torch
+
+            processed = self.processor.image_processor(images=images, return_tensors="pt")
+            pixel_values = processed["pixel_values"]
+            pixel_mask = processed.get("pixel_attention_mask")
+            if pixel_values.ndim == 5:
+                pixel_values = pixel_values.reshape(-1, *pixel_values.shape[-3:])
+            if pixel_mask is not None and pixel_mask.ndim == 4:
+                pixel_mask = pixel_mask.reshape(-1, *pixel_mask.shape[-2:])
+            pixel_values = pixel_values.to("cuda:0", dtype=torch.bfloat16)
+            vision = self.model.model.vision_model
+            patch_size = vision.patch_size
+            patch_height, patch_width = (
+                (patch_size, patch_size) if isinstance(patch_size, int) else tuple(patch_size)
+            )
+            if pixel_mask is None:
+                pixel_mask = torch.ones(
+                    (pixel_values.shape[0], pixel_values.shape[2], pixel_values.shape[3]),
+                    dtype=torch.bool,
+                    device=pixel_values.device,
+                )
+            else:
+                pixel_mask = pixel_mask.to(pixel_values.device, dtype=torch.bool)
+            patch_mask = pixel_mask.unfold(1, patch_height, patch_height).unfold(
+                2, patch_width, patch_width
+            ).any(dim=-1).any(dim=-1)
+            with torch.inference_mode():
+                hidden = vision.embeddings(
+                    pixel_values=pixel_values, patch_attention_mask=patch_mask
+                )
+                first_layer = vision.encoder.layers[0]
+                normalized = first_layer.layer_norm1(hidden)
+                keys = first_layer.self_attn.k_proj(normalized)
+                valid = patch_mask.reshape(patch_mask.shape[0], -1).unsqueeze(-1)
+                pooled = (keys * valid).sum(dim=1) / valid.sum(dim=1).clamp_min(1)
+            features = pooled.float().cpu().numpy()
+            return select_temporal_surprises(features, target_frames=target_frames, order=3)
 
     def analyze(self, images: list, pts_ms: list[int]) -> dict:
         if len(images) != 4 or len(pts_ms) != 4 or any(b <= a for a, b in zip(pts_ms, pts_ms[1:])):

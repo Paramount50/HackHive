@@ -45,6 +45,7 @@ class EventOrchestrator:
         action_window_ms: int = 2_000,
         action_stride_ms: int = 1_000,
         semantic_submit: Callable[[SemanticJob], bool] | None = None,
+        semantic_pool_frames: int = 16,
     ) -> None:
         self.session_id = session_id
         self.session_started_utc_ms = session_started_utc_ms
@@ -64,6 +65,9 @@ class EventOrchestrator:
         self.last_action_frame_indices: list[int] = []
         self.semantic_submit = semantic_submit
         self.semantic_submitted_events: set[str] = set()
+        if semantic_pool_frames < 4:
+            raise ValueError("semantic_pool_frames must be at least four")
+        self.semantic_pool_frames = semantic_pool_frames
 
     def process(self, packet: FramePacket) -> list[str]:
         if packet.session_id != self.session_id:
@@ -191,15 +195,19 @@ class EventOrchestrator:
         ]
         if len(available) < 4:
             return
-        indices = [round(index * (len(available) - 1) / 3) for index in range(4)]
-        selected = [available[index] for index in indices]
+        if len(available) > self.semantic_pool_frames:
+            pool_indices = [
+                round(index * (len(available) - 1) / (self.semantic_pool_frames - 1))
+                for index in range(self.semantic_pool_frames)
+            ]
+            available = [available[index] for index in pool_indices]
         job = SemanticJob(
             event_id=event_id,
-            camera_id=selected[-1].camera_id,
+            camera_id=available[-1].camera_id,
             candidate_key=candidate_key,
             expected_outcome=str(candidate.category),
-            image_paths=tuple(frame.asset_id for frame in selected),
-            source_pts_ms=tuple(frame.source_pts_ms for frame in selected),
+            image_paths=tuple(frame.asset_id for frame in available),
+            source_pts_ms=tuple(frame.source_pts_ms for frame in available),
         )
         if self.semantic_submit(job):
             self.semantic_submitted_events.add(event_id)

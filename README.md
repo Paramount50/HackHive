@@ -58,6 +58,17 @@ is estimated from frame index/FPS. Label footage and verify timestamps before fo
 evaluation. Smaller clips may yield repeated windows across requests. Source rights,
 split membership, and expected events must be recorded before benchmark use.
 
+Integrated candidate verification forms a causal pool of at most 16 replay frames.
+When the pool contains more than four frames, it applies third-order Swift Sampling
+to globally pooled layer-0 SmolVLM attention-key features and sends four selected
+frames to generation. The incident record keeps the pool size, selected indices/PTS,
+strategy, Taylor order, and selection latency. This is a short-window adaptation of
+[Swift Sampling](https://arxiv.org/abs/2605.22678), whose published gains concern
+long-video benchmarks and different VLMs; GPU compatibility and event recall remain
+unverified here. Exactly four available frames are all retained.
+Irregular timestamps, incompatible vision internals, or invalid selector output trigger
+a recorded uniform fallback instead of failing the incident-verification request.
+
 Admission requires at least 3 GiB free system RAM and 1800 MiB GPU budget, with the
 budget capped at 4 GiB and a 1 GiB free-VRAM reserve. This is a conservative startup
 gate, not a guarantee against competing applications. PyTorch allocator limits do

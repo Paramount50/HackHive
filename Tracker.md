@@ -125,6 +125,16 @@ timing, provenance, raw structured output, and verdict on the existing incident.
 Verification: 70 passed, 4 GPU-dependent skipped. CPU tests use an injected worker;
 real replay-to-VLM execution and quality remain a GPU-owner validation gate.
 
+Swift Sampling stage — 2026-10-16: candidate verification now supplies a bounded
+causal pool of up to 16 frames. SmolVLM extracts globally pooled attention-key features
+from vision layer 0, applies the authors' third-order relative Taylor residual and
+local-maximum selection, and forwards four chronological frames to generation. The
+selection strategy, pool size, indices, source PTS, Taylor order, and latency are stored
+with the VLM analysis window. NumPy tests cover residual selection and service tests
+cover selected-frame handoff. Verification: 73 passed, 4 GPU-dependent skipped.
+This `16 → 4` short-window adaptation has not been run on the GPU or shown to improve
+event recall; the paper evaluates longer pools and different VLM backbones.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.
