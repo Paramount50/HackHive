@@ -103,7 +103,14 @@ class Store:
         )
         self.connection.commit()
 
-    def create_session(self, started_utc_ms: int, mode: str = "replay") -> str:
+    def create_session(
+        self,
+        started_utc_ms: int,
+        mode: str = "replay",
+        *,
+        policy_version: str | None = None,
+        policy_json: dict[str, Any] | None = None,
+    ) -> str:
         self.seed_camera()
         session_id = str(uuid.uuid4())
         policy = self.connection.execute(
@@ -113,7 +120,14 @@ class Store:
             """INSERT INTO stream_sessions
             (session_id,camera_id,mode,started_utc_ms,policy_version,policy_json)
             VALUES (?,?,?,?,?,?)""",
-            (session_id, "cam-1", mode, started_utc_ms, policy["policy_version"], policy["policy_json"]),
+            (
+                session_id,
+                "cam-1",
+                mode,
+                started_utc_ms,
+                policy_version or policy["policy_version"],
+                json.dumps(policy_json) if policy_json is not None else policy["policy_json"],
+            ),
         )
         self.connection.commit()
         return session_id
@@ -127,6 +141,7 @@ class Store:
                 "supported": item.get("supported"),
                 "evidence_window_ids": [],
                 "frame_indices": item.get("frame_indices", analysis.frame_indices),
+                **({"details": item["details"]} if isinstance(item.get("details"), dict) else {}),
             }
             for item in analysis.observations
         ] + [{"name": "evidence_completeness", "supported": supported >= 1}]
@@ -184,7 +199,7 @@ class Store:
         policy = self.connection.execute(
             "SELECT policy_version,policy_json FROM stream_sessions WHERE session_id=?", (session_id,)
         ).fetchone()
-        candidate_only = analysis.model_id.startswith("candidate://")
+        candidate_only = analysis.model_id.startswith(("candidate://", "xclip://"))
         decision = DecisionState.NEEDS_REVIEW if outcome == Category.SUSPECTED_TAILGATING or candidate_only else DecisionState.ACCEPTED
         self.connection.execute(
             """INSERT INTO events
@@ -200,7 +215,12 @@ class Store:
              "evidence_completeness_v1", json.dumps(predicates), "[]", json.dumps([window_id]),
              policy["policy_version"], policy["policy_json"],
              "unknown" if outcome == Category.SUSPECTED_TAILGATING else "not_applicable",
-             "simulated" if outcome == Category.SUSPECTED_TAILGATING else None, "[]", "[]",
+             (
+                 "simulated"
+                 if outcome == Category.SUSPECTED_TAILGATING and analysis.model_id.startswith("fixture://")
+                 else None
+             ),
+             "[]", "[]",
              json.dumps(analysis.limitations), now, now, now + 90 * 24 * 3600 * 1000),
         )
         self.connection.commit()
@@ -355,7 +375,7 @@ class Store:
         return status, [dict(row) for row in rows]
 
     def list_events(self, intent: QueryIntent) -> list[dict[str, Any]]:
-        sql = """SELECT e.*, c.camera_id, c.name AS camera_name
+        sql = """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode
                  FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
                  JOIN cameras c ON c.camera_id=s.camera_id WHERE 1=1"""
         params: list[Any] = []

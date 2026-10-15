@@ -113,8 +113,15 @@ class IoUTracker:
 
 @dataclass(frozen=True)
 class ScenePolicy:
-    gate_line_y: float = 0.5
+    gate_line_y: float | None = None
     zone: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+
+    def __post_init__(self) -> None:
+        if self.gate_line_y is not None and not 0.0 <= self.gate_line_y <= 1.0:
+            raise ValueError("gate_line_y must be between 0 and 1")
+        x1, y1, x2, y2 = self.zone
+        if not (0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1):
+            raise ValueError("zone must be an increasing normalized rectangle")
 
 
 class PerceptionPipeline:
@@ -140,11 +147,14 @@ class PerceptionPipeline:
             center_x_px, center_y_px = box.center
             center_x = center_x_px / packet.width
             center_y = center_y_px / packet.height
-            side = "inside" if center_y >= self.policy.gate_line_y else "outside"
+            side = (
+                None if self.policy.gate_line_y is None
+                else ("inside" if center_y >= self.policy.gate_line_y else "outside")
+            )
             direction = None
-            if track.side == "outside" and side == "inside":
+            if self.policy.gate_line_y is not None and track.side == "outside" and side == "inside":
                 direction = "entry"
-            elif track.side == "inside" and side == "outside":
+            elif self.policy.gate_line_y is not None and track.side == "inside" and side == "outside":
                 direction = "exit"
             track.side = side
             zone_x1, zone_y1, zone_x2, zone_y2 = self.policy.zone

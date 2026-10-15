@@ -27,7 +27,7 @@ class VisualObservation(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     outcome: Outcome
     summary: str = Field(min_length=1, max_length=500)
-    observations: list[Observation] = Field(max_length=4)
+    observations: list[Observation] = Field(default_factory=list, max_length=4)
     limitations: list[str] = Field(max_length=8)
 
     @model_validator(mode="after")
@@ -77,5 +77,11 @@ def generation_schema() -> dict:
             "type": "integer", "minimum": 0, "maximum": 3}
         schema["properties"]["observations"] = {
             "type": "array", "maxItems": 2 if allowed else 0, "items": observation}
+        if allowed:
+            schema["required"] = ["outcome", "summary", "observations", "limitations"]
+        else:
+            # LMFE 0.11.3 can admit a first item despite maxItems=0. Omit this
+            # field for abstentions/normal; validation supplies an empty list.
+            del schema["properties"]["observations"]
         alternatives.append(schema)
     return {"anyOf": alternatives}

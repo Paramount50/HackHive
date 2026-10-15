@@ -6,9 +6,7 @@ const labels = {
   person_down: "Person down",
   crowd_gathering: "Crowd gathering",
   suspected_tailgating: "Suspected tailgating",
-  aggression_fight: "Aggression / fight",
-  fire_smoke: "Fire / smoke",
-  intrusion_unauthorized_access: "Intrusion / unauthorized access"
+  aggression_fight: "Possible physical altercation"
 };
 const terminalReplayStates = new Set(["completed", "failed", "stopped"]);
 
@@ -19,12 +17,13 @@ async function request(path, options) {
 }
 
 function StatusBar({ status }) {
+  const analysis = status?.analysis;
   return (
     <section className="status-bar panel">
-      <div><span className="eyebrow">SOURCE</span><strong>Fixture Gate</strong><span className="badge replay">REPLAY</span></div>
+      <div><span className="eyebrow">SOURCE</span><strong>Local video</strong><span className="badge replay">REPLAY</span></div>
       <div><span className="eyebrow">HEALTH</span><strong>{status?.source?.health ?? "loading"}</strong></div>
-      <div><span className="eyebrow">ANALYSIS</span><strong className="warning">Degraded · fixture</strong></div>
-      <div><span className="eyebrow">POLICY</span><strong>{status?.policy ?? "loading"}</strong></div>
+      <div><span className="eyebrow">ANALYSIS</span><strong className={analysis?.degraded ? "warning" : ""}>{analysis?.mode ?? "loading"}</strong></div>
+      <div><span className="eyebrow">POLICY</span><strong>{analysis?.message ?? "Review required · local processing"}</strong></div>
     </section>
   );
 }
@@ -32,6 +31,8 @@ function StatusBar({ status }) {
 function ReplayControl({ job, onJob, onError }) {
   const [sourceName, setSourceName] = useState("demo.mp4");
   const [sampleFps, setSampleFps] = useState(5);
+  const [gateLineY, setGateLineY] = useState("");
+  const [zone, setZone] = useState([0, 0, 100, 100]);
 
   useEffect(() => {
     if (!job?.session_id || terminalReplayStates.has(job.status)) return undefined;
@@ -47,7 +48,13 @@ function ReplayControl({ job, onJob, onError }) {
       onJob(await request("/api/replays", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ source_name: sourceName, sample_fps: Number(sampleFps), pace: true })
+        body: JSON.stringify({
+          source_name: sourceName,
+          sample_fps: Number(sampleFps),
+          pace: true,
+          ...(gateLineY === "" ? {} : { gate_line_y: Number(gateLineY) / 100 }),
+          zone: zone.map((value) => Number(value) / 100)
+        })
       }));
       onError("");
     } catch (exception) { onError(exception.message); }
@@ -64,12 +71,15 @@ function ReplayControl({ job, onJob, onError }) {
         <div><span className="eyebrow">REAL VIDEO REPLAY</span><strong>Decode a server-local recording</strong></div>
         <label>File in recordings/<input value={sourceName} onChange={(event) => setSourceName(event.target.value)} required /></label>
         <label>Sample FPS<input type="number" min="0.5" max="10" step="0.5" value={sampleFps} onChange={(event) => setSampleFps(event.target.value)} /></label>
+        <label>Gate line from top (%)<input type="number" min="0" max="100" placeholder="optional" value={gateLineY} onChange={(event) => setGateLineY(event.target.value)} /></label>
+        {zone.map((value, index) => <label key={index}>Zone {["left", "top", "right", "bottom"][index]} (%)<input type="number" min="0" max="100" value={value} onChange={(event) => setZone((current) => current.map((item, position) => position === index ? event.target.value : item))} /></label>)}
         <button type="submit" disabled={job && !terminalReplayStates.has(job.status)}>Start replay</button>
         {job && !terminalReplayStates.has(job.status) && <button type="button" className="secondary" onClick={stop}>Stop</button>}
       </form>
       {job && <div className="replay-progress">
-        <div><span className={`job-state ${job.status}`}>{job.status}</span><strong>{job.frame_count} sampled frame(s)</strong><span className="metadata">{job.source_name}</span></div>
+        <div><span className={`job-state ${job.status}`}>{job.status}</span><strong>{job.frame_count} sampled frame(s) · {job.analysis}</strong><span className="metadata">{job.source_name}</span></div>
         {job.latest_frame && <img src={`${job.latest_frame.frame_url}?v=${job.frame_count}`} alt="Latest sampled replay frame" />}
+        {job.analysis_message && <span className="metadata">{job.analysis_message}</span>}
         {job.error && <span className="error-text">{job.error}</span>}
       </div>}
     </section>
@@ -83,8 +93,7 @@ function QueryPanel({ onSelect, onError }) {
   const suggestions = [
     "Show suspected tailgating today",
     "How many crowd gatherings were recorded?",
-    "List person-down incidents from the last hour",
-    "Were there any fire or smoke incidents today?"
+    "List person-down incidents from the last hour"
   ];
 
   async function ask(event, promptedQuestion = question) {
@@ -184,6 +193,11 @@ function App() {
   const [error, setError] = useState("");
   const [replayJob, setReplayJob] = useState(null);
 
+  function updateReplay(job) {
+    setReplayJob(job);
+    if (terminalReplayStates.has(job?.status)) loadEvents();
+  }
+
   async function loadEvents() {
     try {
       const query = category ? `?category=${encodeURIComponent(category)}` : "";
@@ -231,7 +245,7 @@ function App() {
       <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div><div className="header-actions"><button onClick={() => runFixture()}>Run analysis fixture</button><button onClick={() => runFixture("/api/fixtures/perception-run")}>Run perception fixture</button></div></header>
       <StatusBar status={status} />
       <div className="policy panel"><strong>Fixture mode</strong><span>Simulated access grants</span><span>Timezone: Asia/Kolkata</span><span className="warning">Not real inference</span></div>
-      <ReplayControl job={replayJob} onJob={setReplayJob} onError={setError} />
+      <ReplayControl job={replayJob} onJob={updateReplay} onError={setError} />
       <QueryPanel onSelect={selectEvent} onError={setError} />
       {error && <div className="error panel">{error}</div>}
       <section className="workspace">
@@ -245,7 +259,7 @@ function App() {
         </div>
         <EvidenceDrawer event={selected} onClose={() => setSelected(null)} />
       </section>
-      <footer>Coverage is limited to recorded fixture sessions. Real capture, model inference, and media clips are not connected yet.</footer>
+      <footer>Local replay analysis requires detector weights. VLM review is not connected; candidate events remain unreviewed until a person checks them.</footer>
     </main>
   );
 }

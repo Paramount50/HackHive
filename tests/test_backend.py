@@ -6,7 +6,7 @@ from time import monotonic, sleep
 
 from fastapi.testclient import TestClient
 
-from backend.contracts import FixtureAnalysis, QueryIntent, ReviewRequest
+from backend.contracts import FixtureAnalysis, QueryIntent, ReplayStartRequest, ReviewRequest
 from backend.storage import Store
 from backend.ingest.manager import ReplayManager
 from backend.ingest.replay import BoundedFrameBuffer, FixtureReplay, FramePacket, VideoReplay
@@ -107,13 +107,53 @@ def test_query_uses_half_open_time_filters() -> None:
     assert len(store.list_events(QueryIntent(end_utc_ms=2_000))) == 0
 
 
-def test_api_fixture_and_citations() -> None:
-    from backend.main import app
+def test_replay_policy_is_validated_and_persisted() -> None:
+    request = ReplayStartRequest(source_name="entrance.avi", gate_line_y=0.55, zone=(0.1, 0.2, 0.8, 0.9))
+    assert request.gate_line_y == 0.55
+    try:
+        ReplayStartRequest(source_name="entrance.avi", zone=(0.8, 0.2, 0.1, 0.9))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unordered zone should be rejected")
 
-    with TestClient(app) as client:
+    store = make_store()
+    session_id = store.create_session(
+        1_000, policy_version="replay-policy-v1",
+        policy_json={"gate_line_y": request.gate_line_y, "zone": request.zone},
+    )
+    row = store.connection.execute(
+        "SELECT policy_version,policy_json FROM stream_sessions WHERE session_id=?",
+        (session_id,),
+    ).fetchone()
+    assert row["policy_version"] == "replay-policy-v1"
+    assert json.loads(row["policy_json"]) == {"gate_line_y": 0.55, "zone": [0.1, 0.2, 0.8, 0.9]}
+
+
+def test_visual_tailgating_candidate_does_not_claim_simulated_access_evidence() -> None:
+    store = make_store()
+    session_id = store.create_session(1_000)
+    candidate = FixtureAnalysis(
+        outcome="suspected_tailgating",
+        summary="Two people crossed the configured gate in the same direction.",
+        model_id="candidate://cpu-rules",
+        observations=[{"predicate": "same_direction_passages", "supported": True}],
+    )
+    event_id = store.record_analysis(session_id, 2_000, 3_000, candidate, "visual-only-tailgate")
+    event = store.get_event_row(event_id)
+    assert event["authorization_state"] == "unknown"
+    assert event["access_evidence_source"] is None
+
+
+def test_api_fixture_and_citations() -> None:
+    from backend import main
+
+    with TestClient(main.app) as client:
         response = client.post("/api/fixtures/run")
         assert response.status_code == 200
         assert response.json()["fixture"] is True
+        stored = main.store.get_event_row(response.json()["event_id"])
+        assert stored["access_evidence_source"] == "simulated"
         query = client.post("/api/query", json={"operation": "list"})
         assert query.status_code == 200
         assert query.json()["citations"]
@@ -222,6 +262,39 @@ def test_replay_manager_decodes_in_background_and_reports_latest_frame(tmp_path)
     assert Path(result["latest_frame"]["asset_id"]).is_file()
 
 
+def test_replay_manager_processes_frames_and_finishes_analysis(tmp_path) -> None:
+    recordings = tmp_path / "recordings"
+    recordings.mkdir()
+    write_test_video(recordings / "hallway.avi")
+    seen = []
+    finished = []
+    manager = ReplayManager(recordings, tmp_path / "assets", context_frames=3)
+
+    manager.start(
+        session_id="session-analysis",
+        camera_id="cam-1",
+        source_name="hallway.avi",
+        started_utc_ms=5_000,
+        sample_fps=5,
+        pace=False,
+        max_frames=None,
+        on_frame=lambda packet: seen.append(packet.frame_id) or ["same-event"],
+        on_finish=finished.append,
+    )
+    deadline = monotonic() + 3
+    result = manager.status("session-analysis")
+    while result["status"] not in {"completed", "failed"} and monotonic() < deadline:
+        sleep(0.01)
+        result = manager.status("session-analysis")
+
+    assert result["status"] == "completed"
+    assert result["analysis"] == "active"
+    assert result["events_created"] == 1
+    assert seen == list(range(result["frame_count"]))
+    assert len(finished) == 1
+    assert finished[0].frame_id == result["frame_count"] - 1
+
+
 def test_replay_api_starts_background_job_and_rejects_path_escape(tmp_path, monkeypatch) -> None:
     from backend import main
 
@@ -230,6 +303,7 @@ def test_replay_api_starts_background_job_and_rejects_path_escape(tmp_path, monk
     write_test_video(recordings / "entrance.avi")
     manager = ReplayManager(recordings, tmp_path / "assets")
     monkeypatch.setattr(main, "replay_manager", manager)
+    monkeypatch.setattr(main, "get_action_classifier", lambda: None)
 
     with TestClient(main.app) as client:
         response = client.post(

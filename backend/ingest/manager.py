@@ -3,9 +3,13 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from threading import Event, Lock, Thread
-from typing import Any
+from typing import Any, Callable
 
-from .replay import BoundedFrameBuffer, VideoReplay
+from .replay import BoundedFrameBuffer, FramePacket, VideoReplay
+
+
+FrameHandler = Callable[[FramePacket], list[str] | None]
+FinishHandler = Callable[[FramePacket | None], None]
 
 
 @dataclass
@@ -21,8 +25,12 @@ class ReplayJob:
     status: str = "starting"
     frame_count: int = 0
     error: str | None = None
+    analysis_message: str | None = None
+    event_ids: set[str] = field(default_factory=set)
     stop: Event = field(default_factory=Event)
     thread: Thread | None = None
+    on_frame: FrameHandler | None = None
+    on_finish: FinishHandler | None = None
 
 
 class ReplayManager:
@@ -63,6 +71,9 @@ class ReplayManager:
         sample_fps: float,
         pace: bool,
         max_frames: int | None,
+        on_frame: FrameHandler | None = None,
+        on_finish: FinishHandler | None = None,
+        analysis_message: str | None = None,
     ) -> dict[str, Any]:
         source = self.resolve_source(source_name)
         with self._lock:
@@ -80,6 +91,9 @@ class ReplayManager:
                 pace=pace,
                 max_frames=max_frames,
                 buffer=BoundedFrameBuffer(self.context_frames),
+                on_frame=on_frame,
+                on_finish=on_finish,
+                analysis_message=analysis_message,
             )
             thread = Thread(
                 target=self._run,
@@ -93,6 +107,7 @@ class ReplayManager:
         return self.status(session_id)
 
     def _run(self, job: ReplayJob, source: Path) -> None:
+        last_packet: FramePacket | None = None
         try:
             replay = VideoReplay(
                 source,
@@ -112,6 +127,13 @@ class ReplayManager:
                 with self._lock:
                     job.buffer.append(packet)
                     job.frame_count += 1
+                last_packet = packet
+                if job.on_frame is not None:
+                    created = job.on_frame(packet)
+                    with self._lock:
+                        job.event_ids.update(created or [])
+            if job.on_finish is not None:
+                job.on_finish(last_packet)
             with self._lock:
                 job.status = "stopped" if job.stop.is_set() else "completed"
         except Exception as exc:  # worker failures are exposed through job status
@@ -131,6 +153,9 @@ class ReplayManager:
                 "source_name": job.source_name,
                 "status": job.status,
                 "frame_count": job.frame_count,
+                "analysis": "active" if job.on_frame is not None else "decode_only",
+                "analysis_message": job.analysis_message,
+                "events_created": len(job.event_ids),
                 "latest_frame": latest,
                 "error": job.error,
             }

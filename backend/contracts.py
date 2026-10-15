@@ -124,12 +124,22 @@ class ReplayStartRequest(BaseModel):
     sample_fps: float = Field(default=5.0, ge=0.5, le=10.0)
     pace: bool = True
     max_frames: int | None = Field(default=None, ge=1, le=10_000)
+    gate_line_y: float | None = Field(default=None, ge=0, le=1)
+    zone: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
 
     @field_validator("source_name")
     @classmethod
     def reject_blank_source(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("source_name must not be blank")
+        return value
+
+    @field_validator("zone")
+    @classmethod
+    def valid_zone(cls, value: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+        x1, y1, x2, y2 = value
+        if not (0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1):
+            raise ValueError("zone must be an increasing normalized rectangle")
         return value
 
 

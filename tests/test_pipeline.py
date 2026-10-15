@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from backend.ingest.replay import FramePacket
-from backend.perception.pipeline import BoxDetection, PerceptionPipeline
+from backend.perception.pipeline import BoxDetection, PerceptionPipeline, ScenePolicy
 from backend.perception.rules import CandidateCategory, CandidateRules
 
 
@@ -27,10 +27,19 @@ def test_iou_tracker_preserves_id_and_emits_gate_crossing_once() -> None:
         [person(40, 35, 60, 55)],
         [person(40, 50, 60, 70)],
         [person(40, 55, 60, 75)],
-    ]))
+    ]), policy=ScenePolicy(gate_line_y=0.5))
     observations = [pipeline.process(packet(index, index * 500))[0][0] for index in range(4)]
     assert len({item.track_id for item in observations}) == 1
     assert [item.direction for item in observations] == [None, None, "entry", None]
+
+
+def test_gate_crossings_are_not_inferred_without_a_configured_gate_line() -> None:
+    pipeline = PerceptionPipeline(ScriptedDetector([
+        [person(40, 20, 60, 40)],
+        [person(40, 50, 60, 70)],
+    ]))
+    observations = [pipeline.process(packet(index, index * 500))[0][0] for index in range(2)]
+    assert all(item.direction is None for item in observations)
 
 
 def test_horizontal_person_persistence_produces_candidate() -> None:

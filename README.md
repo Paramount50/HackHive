@@ -4,9 +4,14 @@
 
 The standalone worker is `backend/inference/smolvlm.py`. It serializes requests,
 loads only local safetensors/configuration, and returns observations rather than
-automatically accepting incidents. The existing replay API is not yet wired to it.
-The six-category application taxonomy remains unchanged; the VLM boundary currently
-implements only the three planned P0 categories plus `none` and `unknown`.
+automatically accepting incidents. Replay frames can run through the local YOLO
+detector, temporal candidate rules, event storage, and evidence exporter. The VLM
+worker is still a separate smoke-test path and does not yet confirm application events.
+The CPU rules detect candidate `person_down`, `crowd_gathering`, and
+`suspected_tailgating` events. An optional local XCLIP zero-shot action ranker adds
+reviewable `aggression_fight`, `person_down`, and `crowd_gathering` candidates.
+Its scores are uncalibrated, not verified labels, and do not establish production
+accuracy or generalization. Tailgating remains geometry/policy based.
 
 From the HackHive directory, using a Python 3.12 virtual environment:
 
@@ -57,10 +62,59 @@ differs from the proposed 384-pixel seed to match the model's native image token
 See the official [model card](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Video-Instruct)
 and [processor documentation](https://huggingface.co/docs/transformers/v4.57.1/model_doc/smolvlm).
 
-The first runnable slice is a CPU-only deterministic fixture path. It deliberately
-does not claim real model inference: fixture responses are marked in API responses,
-status, and query coverage. The inference adapter can be replaced by the local
-perception worker in the next milestone without changing event/query storage.
+Without detector weights, replay is deliberately reported as `decode_only`; it does
+not create incidents. Candidate events from YOLO/rules remain unreviewed and are not
+VLM-confirmed. Tailgating is disabled unless a gate line is supplied, and the default
+crowd zone is the whole frame; configure geometry for each camera before interpreting
+those categories.
+
+## Real video replay setup
+
+Install the detector dependency and fetch the small YOLO11n weights once while online:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -c "from ultralytics import YOLO; YOLO('models/yolo11n.pt')"
+```
+
+For action-ranking candidates, install the GPU dependencies and download the pinned
+XCLIP model once while online:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-gpu.txt
+.\.venv\Scripts\python.exe scripts\download_action_model.py
+```
+
+The action ranker runs on CUDA when available and otherwise on CPU. Its overlapping
+two-second windows are sampled as eight ordered frames, once per second. Predictions
+retain the raw class scores, normalized ranking scores, model revision, prompt version,
+and an explicit uncalibrated limitation. Low-margin/low-score windows abstain as
+`unknown`; normal `none`/`unknown` windows are logged, not turned into incidents.
+All model-generated incidents remain `needs_review`. Local weights remain under the
+Git-ignored `models/` directory.
+
+The first integrated pilot replay completed all six supplied clips and evaluated
+29 action windows: 13 ranked `aggression_fight`, 12 `person_down`, one
+`crowd_gathering`, and three abstained as `unknown`. Every replay-created event was
+unreviewed and had a ready keyframe and event clip. Warm per-window inference latency
+was 176 ms p50 / 281 ms p95 on this RTX 3060 laptop; the first request was 1.50 s.
+These are unlabelled observations; model-only inference latency excludes model loading,
+video decoding, YOLO, and evidence export. The results are not precision/recall or
+proof that categories are correct. The full scores, timings, and event evidence status are in
+[`reports/action-pilot-20261016.json`](reports/action-pilot-20261016.json).
+
+To replay the supplied clips directly, point the service at their folder before
+starting it:
+
+```powershell
+$env:HACKHIVE_RECORDINGS_DIR = (Resolve-Path ..\sample_videos).Path
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload
+```
+
+Use a source filename from that folder in the dashboard. The optional gate-line field
+is a normalized horizontal line expressed as a percentage from the top; leave it blank
+unless that line actually corresponds to a gate. The service reports `decode_only` if
+weights are missing, and the replay status reports the analysis mode and event count.
 
 ## Run locally
 
@@ -69,17 +123,16 @@ perception worker in the next milestone without changing event/query storage.
 .\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload
 ```
 
-Open http://127.0.0.1:8000, click **Run deterministic fixture**, then inspect,
-query, and review the event. Runtime SQLite data is written under `data/` and
-must not be committed.
+Open http://127.0.0.1:8000 to inspect API status. The React dashboard provides
+deterministic fixture buttons plus real local replay controls. Runtime SQLite data
+and generated evidence are written under `data/` and must not be committed.
 
 The API includes `/api/status`, `/api/events`, `/api/events/{id}`,
-`/api/events/{id}/reviews`, `/api/query`, `/api/fixtures/run`, and
-`/api/fixtures/perception-run`. The perception fixture passes deterministic
-CPU detections through temporal candidate rules before storing an event.
+`/api/events/{id}/reviews`, `/api/query`, `/api/replays`, and fixture endpoints.
+The replay status explicitly distinguishes real detector analysis from decode-only.
 
-To run a real replay, place a video under `recordings/` and start a bounded
-background job:
+To run a real replay, place a video under `recordings/` (or configure
+`HACKHIVE_RECORDINGS_DIR`) and start a bounded background job:
 
 ```powershell
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/replays `
@@ -103,9 +156,29 @@ npm run dev
 ```
 
 Start the FastAPI service first. Open http://127.0.0.1:5173 to use the React
-dashboard. It currently displays fixture incidents and their evidence metadata;
-real frames, clips, capture, and inference are intentionally not represented
-as complete.
+dashboard. The dashboard displays replay frames, candidate incidents, and evidence when local
+YOLO is ready. VLM confirmation, webcam/RTSP input, and validated event accuracy are
+still incomplete. A model ranking on any supplied clip is a pilot observation only;
+the six clips have no verified ground-truth annotations or held-out-camera coverage.
+
+## Label the supplied videos before evaluating
+
+The sample AVI files are useful for decoder/inference smoke tests, but their event
+labels and rights/provenance are not established. Review each video in a player and
+record only clear event intervals or confirmed-normal footage:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\label_videos.py `
+  --videos ..\sample_videos `
+  --output evaluation\sample_manifest.jsonl `
+  --provenance "<record how the source was obtained>" `
+  --license "<record the permission/license basis>"
+.\.venv\Scripts\python.exe scripts\validate_manifest.py evaluation\sample_manifest.jsonl
+```
+
+Use `s` for an ambiguous clip rather than labeling it normal. Keep all windows from a
+source in the same split. Six short clips are only a pilot set; do not claim robust
+accuracy or deployment readiness from them.
 
 ## Evaluation
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
+import os
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -8,6 +11,10 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from .contracts import FixtureAnalysis, NaturalQueryRequest, QueryIntent, ReplayStartRequest, ReviewRequest, utc_now_ms
 from .ingest.manager import ReplayManager
+from .media import MediaExporter
+from .orchestrator import EventOrchestrator
+from .perception.action import XClipActionClassifier
+from .perception.pipeline import PerceptionPipeline, ScenePolicy, YoloDetector
 from .perception.rules import CandidateRules, Detection
 from .query import QueryClarification, parse_natural_query
 from .storage import Store
@@ -16,8 +23,29 @@ from .storage import Store
 app = FastAPI(title="HackHive Local Event Desk", version="0.1.0")
 store = Store(Path("data") / "hackhive.sqlite")
 store.seed_camera()
-replay_manager = ReplayManager(Path("recordings"), Path("data") / "replay_frames")
+recordings_root = Path(os.environ.get("HACKHIVE_RECORDINGS_DIR", "recordings"))
+replay_manager = ReplayManager(recordings_root, Path("data") / "replay_frames")
 media_root = (Path("data") / "media").resolve()
+detector_weights = Path(os.environ.get("HACKHIVE_DETECTOR_WEIGHTS", "models/yolo11n.pt")).resolve()
+action_model_dir = Path(os.environ.get("HACKHIVE_ACTION_MODEL_DIR", "models/xclip-base-patch32")).resolve()
+action_classifier: XClipActionClassifier | None = None
+action_classifier_lock = Lock()
+
+
+def get_action_classifier() -> XClipActionClassifier | None:
+    global action_classifier
+    provenance_path = action_model_dir / "hackhive-action-model.json"
+    if not provenance_path.is_file():
+        return None
+    with action_classifier_lock:
+        if action_classifier is None:
+            try:
+                import torch
+                device = "cuda:0" if torch.cuda.is_available() else "cpu"
+                action_classifier = XClipActionClassifier(action_model_dir, device=device)
+            except (ImportError, OSError, RuntimeError, ValueError) as exc:
+                raise HTTPException(status_code=503, detail=f"could not initialize local action model: {exc}") from exc
+        return action_classifier
 
 
 def public_replay_status(result: dict[str, Any]) -> dict[str, Any]:
@@ -58,11 +86,40 @@ load()
 
 @app.get("/api/status")
 def status() -> dict[str, Any]:
+    detector_ready = detector_weights.is_file() and importlib.util.find_spec("ultralytics") is not None
+    action_model_ready = (
+        (action_model_dir / "hackhive-action-model.json").is_file()
+        and (action_model_dir / "config.json").is_file()
+        and (action_model_dir / "model.safetensors").is_file()
+    )
+    if not detector_ready:
+        analysis_message = "Install ultralytics and add local YOLO weights to enable replay event analysis."
+    elif action_model_ready:
+        analysis_message = (
+            "Local YOLO rules and XCLIP action ranking are available; action scores are uncalibrated "
+            "and incidents require operator review."
+        )
+    else:
+        analysis_message = (
+            "YOLO candidate rules are available; the optional local XCLIP action model is not installed."
+        )
     return {
-        "source": {"kind": "file", "mode": "fixture", "health": "ready", "fixture": True},
-        "analysis": {"mode": "deterministic_fixture", "gpu_required": False, "degraded": True,
-                     "scheduler": "bounded"},
-        "policy": "Simulated access grants",
+        "source": {"kind": "file", "mode": "local", "health": "ready", "fixture": False},
+        "analysis": {
+            "mode": (
+                "cpu_detector+xclip_action" if detector_ready and action_model_ready
+                else "cpu_detector" if detector_ready
+                else "decode_only"
+            ),
+            "detector_ready": detector_ready,
+            "detector_weights": detector_weights.name if detector_weights.is_file() else None,
+            "action_model_ready": action_model_ready,
+            "action_model_id": "microsoft/xclip-base-patch32" if action_model_ready else None,
+            "degraded": not detector_ready,
+            "message": analysis_message,
+            "vlm_connected": False,
+        },
+        "policy": "Visual evidence only; no access feed",
         "timezone": "Asia/Kolkata",
     }
 
@@ -84,9 +141,61 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    session_id = store.create_session(started, mode="replay")
+    on_frame = None
+    on_finish = None
+    action_model_enabled = False
+    if detector_weights.is_file():
+        if importlib.util.find_spec("ultralytics") is None:
+            raise HTTPException(
+                status_code=503,
+                detail="YOLO weights exist but ultralytics is missing; install requirements.txt.",
+            )
+        try:
+            detector = YoloDetector(detector_weights, device="cpu")
+        except (ImportError, OSError, RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=503, detail=f"could not initialize local detector: {exc}") from exc
+        policy_version = "replay-policy-v1"
+        policy = {"gate_line_y": request.gate_line_y, "zone": request.zone}
+        classifier = get_action_classifier()
+        session_id = store.create_session(
+            started, mode="replay", policy_version=policy_version, policy_json=policy
+        )
+        action_model_enabled = classifier is not None
+        orchestrator = EventOrchestrator(
+            session_id=session_id,
+            session_started_utc_ms=started,
+            pipeline=PerceptionPipeline(
+                detector,
+                policy=ScenePolicy(gate_line_y=request.gate_line_y, zone=request.zone),
+            ),
+            store=store,
+            media=MediaExporter(media_root),
+            action_classifier=classifier,
+        )
+        on_frame, on_finish = orchestrator.process, orchestrator.finish
+    else:
+        session_id = store.create_session(started, mode="replay")
+    if on_frame is None:
+        analysis_message = (
+            "Video is decoding, but no event analysis ran because local YOLO weights "
+            "were not found."
+        )
+    elif request.gate_line_y is None and action_model_enabled:
+        analysis_message = (
+            "YOLO temporal rules and local action model are active. Tailgating is disabled "
+            "until a gate line is configured; predictions remain unreviewed."
+        )
+    elif request.gate_line_y is None:
+        analysis_message = (
+            "YOLO candidate rules are active; the local action model is not installed. Tailgating is "
+            "disabled until a gate line is configured."
+        )
+    elif action_model_enabled:
+        analysis_message = "YOLO temporal rules and local action model are active; predictions remain unreviewed."
+    else:
+        analysis_message = "Configured person-down, crowd, and gate-crossing rules are active; predictions require review."
     try:
-        return public_replay_status(replay_manager.start(
+        result = replay_manager.start(
             session_id=session_id,
             camera_id="cam-1",
             source_name=request.source_name,
@@ -94,7 +203,11 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
             sample_fps=request.sample_fps,
             pace=request.pace,
             max_frames=request.max_frames,
-        ))
+            on_frame=on_frame,
+            on_finish=on_finish,
+            analysis_message=analysis_message,
+        )
+        return public_replay_status(result)
     except RuntimeError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
 
@@ -175,7 +288,7 @@ def review(event_id: str, request: ReviewRequest) -> dict[str, Any]:
 @app.post("/api/fixtures/run")
 def run_fixture() -> dict[str, Any]:
     started = utc_now_ms() - 10_000
-    session_id = store.create_session(started)
+    session_id = store.create_session(started, mode="offline_eval")
     analysis = FixtureAnalysis(
         outcome="suspected_tailgating",
         summary="Two people crossed the gate in the same direction after one simulated grant.",
@@ -198,7 +311,7 @@ def run_fixture() -> dict[str, Any]:
 def run_perception_fixture() -> dict[str, Any]:
     """Run detections through the CPU rules before persisting the event."""
     started = utc_now_ms() - 10_000
-    session_id = store.create_session(started)
+    session_id = store.create_session(started, mode="offline_eval")
     frames = [
         [
             Detection(
@@ -274,6 +387,12 @@ def query(request: QueryIntent | NaturalQueryRequest) -> dict[str, Any]:
         answer = grouped
     else:
         answer = "No matching recorded incidents." if not result else f"{len(result)} matching recorded incidents."
+    fixture_sessions = store.connection.execute(
+        "SELECT COUNT(*) FROM stream_sessions WHERE mode='offline_eval'"
+    ).fetchone()[0]
+    replay_sessions = store.connection.execute(
+        "SELECT COUNT(*) FROM stream_sessions WHERE mode='replay'"
+    ).fetchone()[0]
     return {
         "answer": answer,
         "needs_clarification": False,
@@ -281,7 +400,14 @@ def query(request: QueryIntent | NaturalQueryRequest) -> dict[str, Any]:
         "timezone": "Asia/Kolkata",
         "events": result,
         "citations": [{"event_id": item["event_id"]} for item in result],
-        "coverage": {"fixture": True, "warning": "Coverage is limited to recorded fixture sessions."},
+        "coverage": {
+            "fixture_sessions": fixture_sessions,
+            "replay_sessions": replay_sessions,
+            "warning": (
+                "Results include deterministic fixture sessions; verify event provenance."
+                if fixture_sessions else "Results include locally replayed footage only."
+            ),
+        },
         "suggestions": [
             "Show suspected tailgating today",
             "How many crowd gatherings were recorded?",

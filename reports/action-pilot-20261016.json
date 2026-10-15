@@ -1,0 +1,813 @@
+{
+  "run_utc": "2026-10-15T19:54:09.355331+00:00",
+  "model_id": "microsoft/xclip-base-patch32",
+  "model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+  "prompt_version": "cctv-actions-v1",
+  "runtime": {
+    "action_device": "cuda:0",
+    "detector_device": "cpu",
+    "torch": "2.9.1+cu126",
+    "transformers": "4.57.6",
+    "ultralytics": "8.3.203"
+  },
+  "hardware": "NVIDIA RTX 3060 Laptop",
+  "window_ms": 2000,
+  "stride_ms": 1000,
+  "sample_fps": 5,
+  "labels_are_verified_ground_truth": false,
+  "limitations": [
+    "Model ranking scores and thresholds are uncalibrated.",
+    "The six clips have not been independently annotated; this report is not accuracy evaluation.",
+    "No held-out camera or normal-footage generalization test is represented."
+  ],
+  "clips": [
+    {
+      "source": "v001_converted 3.avi",
+      "session_id": "f92b9ce7-2139-4972-8c29-8c8c702f7a15",
+      "status": "completed",
+      "sampled_frames": 33,
+      "wall_time_ms": 18459.0,
+      "window_count": 5,
+      "windows": [
+        {
+          "window_start_utc_ms": 1792094049381,
+          "window_end_utc_ms": 1792094051381,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.5932099005372053,
+            "person_down": 0.05370128491141858,
+            "crowd_gathering": 0.24968499916201167,
+            "none": 0.10340381538936434
+          },
+          "class_scores": {
+            "aggression_fight": 7.051737944285075,
+            "person_down": 4.649626572926839,
+            "crowd_gathering": 6.186389764149983,
+            "none": 5.304831504821777
+          },
+          "margin": 0.34352490137519365,
+          "latency_ms": 1495.7657000049949
+        },
+        {
+          "window_start_utc_ms": 1792094050381,
+          "window_end_utc_ms": 1792094052381,
+          "model_outcome": "unknown",
+          "top_category": "crowd_gathering",
+          "normalized_scores": {
+            "aggression_fight": 0.3131856272665063,
+            "person_down": 0.07051105266413603,
+            "crowd_gathering": 0.3617623329600741,
+            "none": 0.2545409871092835
+          },
+          "class_scores": {
+            "aggression_fight": 2.1028143167495728,
+            "person_down": 0.6117877165476481,
+            "crowd_gathering": 2.2470057010650635,
+            "none": 1.8954801162083943
+          },
+          "margin": 0.04857670569356781,
+          "latency_ms": 218.37289998074993
+        },
+        {
+          "window_start_utc_ms": 1792094051381,
+          "window_end_utc_ms": 1792094053381,
+          "model_outcome": "crowd_gathering",
+          "top_category": "crowd_gathering",
+          "normalized_scores": {
+            "aggression_fight": 0.2280778722118852,
+            "person_down": 0.08998106961867654,
+            "crowd_gathering": 0.40349344009950555,
+            "none": 0.2784476180699327
+          },
+          "class_scores": {
+            "aggression_fight": 2.9563749631245932,
+            "person_down": 2.0262871583302817,
+            "crowd_gathering": 3.526848077774048,
+            "none": 3.1559178034464517
+          },
+          "margin": 0.12504582202957287,
+          "latency_ms": 258.56519999797456
+        },
+        {
+          "window_start_utc_ms": 1792094052381,
+          "window_end_utc_ms": 1792094054381,
+          "model_outcome": "unknown",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.35003584636048446,
+            "person_down": 0.08342150837809859,
+            "crowd_gathering": 0.27125654046430653,
+            "none": 0.2952861047971104
+          },
+          "class_scores": {
+            "aggression_fight": 6.569976647694905,
+            "person_down": 5.135847250620524,
+            "crowd_gathering": 6.315006097157796,
+            "none": 6.399885813395183
+          },
+          "margin": 0.05474974156337403,
+          "latency_ms": 176.3656999974046
+        },
+        {
+          "window_start_utc_ms": 1792094053381,
+          "window_end_utc_ms": 1792094055381,
+          "model_outcome": "unknown",
+          "top_category": "none",
+          "normalized_scores": {
+            "aggression_fight": 0.3128040557514735,
+            "person_down": 0.14453816654700125,
+            "crowd_gathering": 0.2060796538067049,
+            "none": 0.33657812389482034
+          },
+          "class_scores": {
+            "aggression_fight": 10.141458511352539,
+            "person_down": 9.369425137837728,
+            "crowd_gathering": 9.724144299825033,
+            "none": 10.214711825052897
+          },
+          "margin": 0.023774068143346816,
+          "latency_ms": 235.06030000862665
+        }
+      ],
+      "events": [
+        {
+          "event_id": "ab551a5d-1ddf-4f99-bda1-622e9841cde4",
+          "category": "aggression_fight",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.593).",
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        },
+        {
+          "event_id": "6cbb7e3a-ad60-40b2-8e4c-b404c91cd7e3",
+          "category": "crowd_gathering",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible crowd gathering flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.403).",
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": "v003_converted 3.avi",
+      "session_id": "16a958fd-9077-443b-a8c5-6c9d1d24e9c1",
+      "status": "completed",
+      "sampled_frames": 15,
+      "wall_time_ms": 1270.8,
+      "window_count": 1,
+      "windows": [
+        {
+          "window_start_utc_ms": 1792094067839,
+          "window_end_utc_ms": 1792094069839,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.5849562976287617,
+            "person_down": 0.06002346405641934,
+            "crowd_gathering": 0.1834647212892234,
+            "none": 0.17155551702559557
+          },
+          "class_scores": {
+            "aggression_fight": 10.077166557312012,
+            "person_down": 7.800364971160889,
+            "crowd_gathering": 8.917651812235514,
+            "none": 8.850536346435547
+          },
+          "margin": 0.40149157633953825,
+          "latency_ms": 154.06529998290353
+        }
+      ],
+      "events": [
+        {
+          "event_id": "f76944ba-1044-41dc-baec-6e558a0ceec6",
+          "category": "aggression_fight",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.585).",
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": "v006_converted 3.avi",
+      "session_id": "eb265244-7404-49b2-a2a4-b8a7b3e5807d",
+      "status": "completed",
+      "sampled_frames": 30,
+      "wall_time_ms": 3084.3,
+      "window_count": 4,
+      "windows": [
+        {
+          "window_start_utc_ms": 1792094069109,
+          "window_end_utc_ms": 1792094071109,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.7005966496721668,
+            "person_down": 0.056335171487792934,
+            "crowd_gathering": 0.06252957602928703,
+            "none": 0.18053860281075315
+          },
+          "class_scores": {
+            "aggression_fight": 5.413137594858806,
+            "person_down": 2.892524321873983,
+            "crowd_gathering": 2.996844927469889,
+            "none": 4.057149887084961
+          },
+          "margin": 0.5200580468614137,
+          "latency_ms": 178.26469999272376
+        },
+        {
+          "window_start_utc_ms": 1792094070109,
+          "window_end_utc_ms": 1792094072109,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.7621861214778443,
+            "person_down": 0.03849629550191757,
+            "crowd_gathering": 0.0715145670660549,
+            "none": 0.1278030159541833
+          },
+          "class_scores": {
+            "aggression_fight": 9.444574356079102,
+            "person_down": 6.458945592244466,
+            "crowd_gathering": 7.078284740447998,
+            "none": 7.658873716990153
+          },
+          "margin": 0.634383105523661,
+          "latency_ms": 158.60379999503493
+        },
+        {
+          "window_start_utc_ms": 1792094071109,
+          "window_end_utc_ms": 1792094073109,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.6865426211296276,
+            "person_down": 0.13046439946913027,
+            "crowd_gathering": 0.05811283981430812,
+            "none": 0.12488013958693399
+          },
+          "class_scores": {
+            "aggression_fight": 9.608415603637695,
+            "person_down": 7.947847684224446,
+            "crowd_gathering": 7.139133930206299,
+            "none": 7.904101689656575
+          },
+          "margin": 0.5560782216604974,
+          "latency_ms": 228.56980000506155
+        },
+        {
+          "window_start_utc_ms": 1792094072109,
+          "window_end_utc_ms": 1792094074109,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.46164338301130725,
+            "person_down": 0.13541683245225997,
+            "crowd_gathering": 0.1262644049827652,
+            "none": 0.2766753795536676
+          },
+          "class_scores": {
+            "aggression_fight": 7.542628765106201,
+            "person_down": 6.316193739573161,
+            "crowd_gathering": 6.246214230855306,
+            "none": 7.030680974324544
+          },
+          "margin": 0.18496800345763964,
+          "latency_ms": 219.09009999944828
+        }
+      ],
+      "events": [
+        {
+          "event_id": "9b9f5b90-c05c-4546-a433-7a3999cd04d1",
+          "category": "aggression_fight",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.701).",
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        },
+        {
+          "event_id": "b820ff86-f4ab-484e-a758-38b5917d93ff",
+          "category": "crowd_gathering",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "The configured number of tracked people remained inside the monitored zone.",
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": "v011_converted 3.avi",
+      "session_id": "0bd138a0-03af-4ce6-b86f-b9bf4a0ed43d",
+      "status": "completed",
+      "sampled_frames": 44,
+      "wall_time_ms": 4020.2,
+      "window_count": 7,
+      "windows": [
+        {
+          "window_start_utc_ms": 1792094072193,
+          "window_end_utc_ms": 1792094074193,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.4140232642835522,
+            "person_down": 0.19988929578018672,
+            "crowd_gathering": 0.11856922726982178,
+            "none": 0.2675182126664393
+          },
+          "class_scores": {
+            "aggression_fight": 5.066906611124675,
+            "person_down": 4.338748137156169,
+            "crowd_gathering": 3.816481431325277,
+            "none": 4.63017209370931
+          },
+          "margin": 0.14650505161711286,
+          "latency_ms": 168.59360001399182
+        },
+        {
+          "window_start_utc_ms": 1792094073193,
+          "window_end_utc_ms": 1792094075193,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.42346187287244963,
+            "person_down": 0.17557383116416145,
+            "crowd_gathering": 0.1435431721064811,
+            "none": 0.2574211238569078
+          },
+          "class_scores": {
+            "aggression_fight": 7.043417930603027,
+            "person_down": 6.163014094034831,
+            "crowd_gathering": 5.96159029006958,
+            "none": 6.545667807261149
+          },
+          "margin": 0.16604074901554183,
+          "latency_ms": 184.00850001489744
+        },
+        {
+          "window_start_utc_ms": 1792094074193,
+          "window_end_utc_ms": 1792094076193,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.7194017475984755,
+            "person_down": 0.10971074633240005,
+            "crowd_gathering": 0.07591960837541625,
+            "none": 0.0949678976937083
+          },
+          "class_scores": {
+            "aggression_fight": 10.00582758585612,
+            "person_down": 8.12525494893392,
+            "crowd_gathering": 7.757082621256511,
+            "none": 7.9809465408325195
+          },
+          "margin": 0.6096910012660754,
+          "latency_ms": 165.55860001244582
+        },
+        {
+          "window_start_utc_ms": 1792094075193,
+          "window_end_utc_ms": 1792094077193,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.7682615501757201,
+            "person_down": 0.06691388527000111,
+            "crowd_gathering": 0.08977849346217096,
+            "none": 0.0750460710921078
+          },
+          "class_scores": {
+            "aggression_fight": 8.586681048075357,
+            "person_down": 6.145957310994466,
+            "crowd_gathering": 6.43989626566569,
+            "none": 6.260653018951416
+          },
+          "margin": 0.6784830567135491,
+          "latency_ms": 163.0715999926906
+        },
+        {
+          "window_start_utc_ms": 1792094076193,
+          "window_end_utc_ms": 1792094078193,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.5388182019169572,
+            "person_down": 0.16808890288050946,
+            "crowd_gathering": 0.13323210596901952,
+            "none": 0.15986078923351382
+          },
+          "class_scores": {
+            "aggression_fight": 11.93149185180664,
+            "person_down": 10.766606648763021,
+            "crowd_gathering": 10.53420639038086,
+            "none": 10.716416994730631
+          },
+          "margin": 0.3707292990364477,
+          "latency_ms": 163.54959999443963
+        },
+        {
+          "window_start_utc_ms": 1792094077193,
+          "window_end_utc_ms": 1792094079193,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.4836338219778194,
+            "person_down": 0.12802501787706397,
+            "crowd_gathering": 0.09908935764985527,
+            "none": 0.2892518024952612
+          },
+          "class_scores": {
+            "aggression_fight": 8.321908950805664,
+            "person_down": 6.992806593577067,
+            "crowd_gathering": 6.736602942148845,
+            "none": 7.807878494262695
+          },
+          "margin": 0.19438201948255818,
+          "latency_ms": 183.37399998563342
+        },
+        {
+          "window_start_utc_ms": 1792094078193,
+          "window_end_utc_ms": 1792094080193,
+          "model_outcome": "aggression_fight",
+          "top_category": "aggression_fight",
+          "normalized_scores": {
+            "aggression_fight": 0.5754681672487486,
+            "person_down": 0.12507785858132447,
+            "crowd_gathering": 0.043081141943605336,
+            "none": 0.2563728322263216
+          },
+          "class_scores": {
+            "aggression_fight": 8.329545021057129,
+            "person_down": 6.803297519683838,
+            "crowd_gathering": 5.737446467081706,
+            "none": 7.520993868509929
+          },
+          "margin": 0.319095335022427,
+          "latency_ms": 162.608899991028
+        }
+      ],
+      "events": [
+        {
+          "event_id": "dae81358-af71-4819-945b-37d413c13d52",
+          "category": "aggression_fight",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.414).",
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": "v026_converted 3.avi",
+      "session_id": "9b0c98d5-3a5e-457f-813d-8181333cde09",
+      "status": "completed",
+      "sampled_frames": 49,
+      "wall_time_ms": 4496.9,
+      "window_count": 8,
+      "windows": [
+        {
+          "window_start_utc_ms": 1792094076214,
+          "window_end_utc_ms": 1792094078214,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.05852530436332145,
+            "person_down": 0.8151142000046325,
+            "crowd_gathering": 0.01827777491414718,
+            "none": 0.1080827207178988
+          },
+          "class_scores": {
+            "aggression_fight": 6.585319836934407,
+            "person_down": 9.219188849131266,
+            "crowd_gathering": 5.421546459197998,
+            "none": 7.198757489522298
+          },
+          "margin": 0.7070314792867337,
+          "latency_ms": 245.8753999962937
+        },
+        {
+          "window_start_utc_ms": 1792094077214,
+          "window_end_utc_ms": 1792094079214,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.04861850615974612,
+            "person_down": 0.8564145085697913,
+            "crowd_gathering": 0.025453847735161336,
+            "none": 0.06951313753530135
+          },
+          "class_scores": {
+            "aggression_fight": 9.795996030171713,
+            "person_down": 12.664746284484863,
+            "crowd_gathering": 9.148858706156412,
+            "none": 10.153507550557455
+          },
+          "margin": 0.78690137103449,
+          "latency_ms": 241.37800000607967
+        },
+        {
+          "window_start_utc_ms": 1792094078214,
+          "window_end_utc_ms": 1792094080214,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.05939549530283663,
+            "person_down": 0.8502649222340567,
+            "crowd_gathering": 0.025353461936473677,
+            "none": 0.06498612052663305
+          },
+          "class_scores": {
+            "aggression_fight": 7.340358734130859,
+            "person_down": 10.001688321431478,
+            "crowd_gathering": 6.489055633544922,
+            "none": 7.430314064025879
+          },
+          "margin": 0.7852788017074237,
+          "latency_ms": 227.4123000097461
+        },
+        {
+          "window_start_utc_ms": 1792094079214,
+          "window_end_utc_ms": 1792094081214,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.03954614534085154,
+            "person_down": 0.8895661748042852,
+            "crowd_gathering": 0.015547871522899928,
+            "none": 0.05533980833196329
+          },
+          "class_scores": {
+            "aggression_fight": 5.680883407592773,
+            "person_down": 8.794149080912272,
+            "crowd_gathering": 4.747338930765788,
+            "none": 6.016907691955566
+          },
+          "margin": 0.834226366472322,
+          "latency_ms": 167.7454000164289
+        },
+        {
+          "window_start_utc_ms": 1792094080214,
+          "window_end_utc_ms": 1792094082214,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.05447035098848229,
+            "person_down": 0.8604273235505204,
+            "crowd_gathering": 0.019180634739169013,
+            "none": 0.06592169072182821
+          },
+          "class_scores": {
+            "aggression_fight": 6.328470865885417,
+            "person_down": 9.08824348449707,
+            "crowd_gathering": 5.284715493520101,
+            "none": 6.51928186416626
+          },
+          "margin": 0.7945056328286922,
+          "latency_ms": 161.54400000232272
+        },
+        {
+          "window_start_utc_ms": 1792094081214,
+          "window_end_utc_ms": 1792094083214,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.02958645098783418,
+            "person_down": 0.91726272989274,
+            "crowd_gathering": 0.011710751689751444,
+            "none": 0.041440067429674377
+          },
+          "class_scores": {
+            "aggression_fight": 5.884145259857178,
+            "person_down": 9.318222681681315,
+            "crowd_gathering": 4.9573361078898115,
+            "none": 6.221076965332031
+          },
+          "margin": 0.8758226624630656,
+          "latency_ms": 145.87350000510924
+        },
+        {
+          "window_start_utc_ms": 1792094082214,
+          "window_end_utc_ms": 1792094084214,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.023473399644278987,
+            "person_down": 0.9223073350248191,
+            "crowd_gathering": 0.011891747315612534,
+            "none": 0.04232751801528933
+          },
+          "class_scores": {
+            "aggression_fight": 6.633766174316406,
+            "person_down": 10.304776827494303,
+            "crowd_gathering": 5.953742980957031,
+            "none": 7.2233357429504395
+          },
+          "margin": 0.8799798170095298,
+          "latency_ms": 144.8946999735199
+        },
+        {
+          "window_start_utc_ms": 1792094083214,
+          "window_end_utc_ms": 1792094085214,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.03366155495257493,
+            "person_down": 0.9065792675470631,
+            "crowd_gathering": 0.01800413673912377,
+            "none": 0.04175504076123822
+          },
+          "class_scores": {
+            "aggression_fight": 6.110373020172119,
+            "person_down": 9.403695106506348,
+            "crowd_gathering": 5.484618186950684,
+            "none": 6.325836817423503
+          },
+          "margin": 0.8648242267858248,
+          "latency_ms": 144.1830999974627
+        }
+      ],
+      "events": [
+        {
+          "event_id": "8c43e197-9c08-45dd-b39a-1543df1e29c8",
+          "category": "person_down",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible person down flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.815).",
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source": "w001_converted 3.avi",
+      "session_id": "a57571aa-59a9-4a50-b065-647d4761f2fe",
+      "status": "completed",
+      "sampled_frames": 26,
+      "wall_time_ms": 2881.6,
+      "window_count": 4,
+      "windows": [
+        {
+          "window_start_utc_ms": 1792094080711,
+          "window_end_utc_ms": 1792094082711,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.18566015427646618,
+            "person_down": 0.6339763544962487,
+            "crowd_gathering": 0.027359439324289102,
+            "none": 0.1530040519029961
+          },
+          "class_scores": {
+            "aggression_fight": 12.28774388631185,
+            "person_down": 13.515837669372559,
+            "crowd_gathering": 10.37288761138916,
+            "none": 12.094290415445963
+          },
+          "margin": 0.44831620021978247,
+          "latency_ms": 281.2495999969542
+        },
+        {
+          "window_start_utc_ms": 1792094081711,
+          "window_end_utc_ms": 1792094083711,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.2348645843656153,
+            "person_down": 0.6361520461226693,
+            "crowd_gathering": 0.0476788274244274,
+            "none": 0.08130454208728809
+          },
+          "class_scores": {
+            "aggression_fight": 9.143226941426596,
+            "person_down": 10.139655431111654,
+            "crowd_gathering": 7.548705259958903,
+            "none": 8.082419713338217
+          },
+          "margin": 0.401287461757054,
+          "latency_ms": 288.73480000765994
+        },
+        {
+          "window_start_utc_ms": 1792094082711,
+          "window_end_utc_ms": 1792094084711,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.21701721781091993,
+            "person_down": 0.6574481579979348,
+            "crowd_gathering": 0.04820081127516332,
+            "none": 0.07733381291598193
+          },
+          "class_scores": {
+            "aggression_fight": 10.908287048339844,
+            "person_down": 12.016676266988119,
+            "crowd_gathering": 9.40368620554606,
+            "none": 9.876441637674967
+          },
+          "margin": 0.44043094018701484,
+          "latency_ms": 179.299399984302
+        },
+        {
+          "window_start_utc_ms": 1792094083711,
+          "window_end_utc_ms": 1792094085711,
+          "model_outcome": "person_down",
+          "top_category": "person_down",
+          "normalized_scores": {
+            "aggression_fight": 0.23879350011828865,
+            "person_down": 0.6516663845766794,
+            "crowd_gathering": 0.039013406165751136,
+            "none": 0.07052670913928097
+          },
+          "class_scores": {
+            "aggression_fight": 10.44030507405599,
+            "person_down": 11.444238662719727,
+            "crowd_gathering": 8.628611246744791,
+            "none": 9.220697402954102
+          },
+          "margin": 0.4128728844583907,
+          "latency_ms": 176.24219998833723
+        }
+      ],
+      "events": [
+        {
+          "event_id": "c67eb624-4e40-43d4-bab8-b65e3ac8f1e0",
+          "category": "person_down",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible person down flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.634).",
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

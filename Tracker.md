@@ -56,11 +56,24 @@ pilot request times were approximately 5.02 and 6.36 seconds. All 54 tests pass.
 GPU admission now takes the lower of NVIDIA and PyTorch free-memory reports because
 they differed on this Windows host. The 20-request smoke is being recorded separately.
 
-Updated: 2026-10-15. This tracker records evidence, not intentions. The first CPU-only backend slice is implemented; real model and performance work remain unrun.
+Stage 7: installed pinned Ultralytics 8.3.203 and local YOLO11n weights. ReplayManager now passes real frames to a per-session detector/event/media pipeline and finalizes active incidents at replay end. The React dashboard exposes detector/replay mode and optional gate-line configuration. A real 33-frame `v001` replay created crowd candidates and ready keyframes/clips; this revealed duplicate crowd events from changing track sets, so crowd identity was changed to a stable per-session zone key. A 49-frame `v026` replay completed without an event, showing that the person-down path is not yet validated. After integration changes, 57 tests passed and the React production build passed. A human-labeling CLI was added; the six sample videos still have no confirmed labels or rights/provenance record. The VLM remains unconnected to replay events.
+
+Post-fix rerun: the same 33-frame `v001` replay now creates one merged `crowd_gathering` event, finalizes it as `ended`/`needs_review`, exports a ready keyframe and event clip, and returns one query citation. The replay policy (zone and optional gate line) is stored with the session. Current verification is 61 passing tests plus a successful frontend production build. These are integration checks, not accuracy results.
+
+Stage 8: integrated the pinned local XCLIP action ranker into replay as overlapping
+two-second/eight-frame windows. `aggression_fight` is an explicit review-only
+category; raw and normalized scores, latency, model revision, prompt version, and
+abstentions are retained. The six supplied clips all replayed to completion: 29
+action windows ranked 13 `aggression_fight`, 12 `person_down`, one
+`crowd_gathering`, and three `unknown`. Eight total events (including two YOLO
+crowd-rule candidates) remained `needs_review`; all had ready keyframes and clips.
+The recorded pilot is in [action-pilot-20261016.json](reports/action-pilot-20261016.json).
+This is an unlabelled smoke/integration result, not verified accuracy or evidence
+of generalization.
 
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
-Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for the organizer-reference decisions. All model/runtime experiments remain unrun.
+Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.
 
 ## Planning deliverables
 
@@ -78,34 +91,35 @@ Documentation verification after the meeting update: all twelve Markdown files e
 
 | ID | Owner | Priority | Task | Depends on | Status | Acceptance evidence to attach |
 |---|---|---|---|---|---|---|
-| T01 | A | P0 | Hardware budget and local four-frame smoke test | — | TODO | Environment/config, 20-request log, peak memory |
-| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | JSONL manifest contract and validator enforce source hashes, provenance/license, supported labels, interval validity, unique samples and source-level split isolation; actual footage and labels remain to collect |
+| T01 | A | P0 | Hardware budget and local four-frame smoke test | — | IN_PROGRESS | GPU is available; 20-request smoke returned 18 valid JSON outputs, all `unknown`; no quality result |
+| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | Manifest validator and labeling CLI added; actual labels, source rights/provenance, and splits still to collect |
 | T03 | B | P0 | SQLite/API skeleton and validated contracts | — | DONE | `backend/storage.py`, `backend/contracts.py`, `backend/main.py`; `pytest -q` passes 5 tests covering unknown outcomes, merge deduplication, idempotent review, time filtering, fixture API and citations |
-| T04 | B | P0 | Paced replay/webcam, timestamps, ring buffer | T03 | IN_PROGRESS | Real replay runs in a bounded background worker with safe local path resolution and start/status/stop APIs; webcam capture remains pending |
-| T05 | A | P0 | CPU detection/tracking and temporal candidates | T04 | IN_PROGRESS | Added a lazy YOLO adapter, deterministic CPU IoU tracker, normalized zone/gate state, one-shot line crossings, and candidate integration in `backend/perception/pipeline.py`; real weights and ByteTrack comparison remain a GPU-owner handoff |
+| T04 | B | P0 | Paced replay/webcam, timestamps, ring buffer | T03 | IN_PROGRESS | Real replay runs in a bounded background worker; frames now reach the detector/event/media callback; webcam remains pending |
+| T05 | A | P0 | CPU detection/tracking and temporal candidates | T04 | IN_PROGRESS | YOLO11n weights and Ultralytics are present; detection runs on sampled frames, but per-class event quality and ByteTrack comparison remain unvalidated |
 | T06 | A | P0 | VLM worker, bounded scheduler and audits | T01,T05 | IN_PROGRESS | `backend/inference/scheduler.py` adds bounded single-worker admission, visible queue overflow, expiry, and handler failure states; scheduler tests pass; real VLM worker/audit loop pending |
 | T07 | B | P0 | Passages and simulated grant reconciliation | T03,T05 | IN_PROGRESS | SQLite passage/grant operations use stable dedupe keys and transactional grant consumption; retry test passes, while normal unmatched/two-grant cases remain pending |
-| T08 | B | P0 | Event merging, keyframes, event/earlier-context clip export | T03,T04,T06 | IN_PROGRESS | CPU orchestrator now turns current-frame candidates into needs-review incidents, merges repeats, saves a keyframe, closes after quiet gap, and exports an honestly bounded clip. Compressed 60-second context pinning and VLM confirmation remain |
-| T09 | C | P0 | Dashboard, evidence drawer, visible failure states | T03,T08 | IN_PROGRESS | Dashboard includes replay controls, worker state, grounded query panel, full incident fetch, ready keyframe/clip playback, and explicit missing/pending/failed evidence states; browser walkthrough with real detector output remains |
+| T08 | B | P0 | Event merging, keyframes, event/earlier-context clip export | T03,T04,T06 | IN_PROGRESS | Real keyframe/clip path exercised; repeated crowd candidates now share stable per-session zone identity and must be rerun; earlier context and VLM confirmation remain |
+| T09 | C | P0 | Dashboard, evidence drawer, visible failure states | T03,T08 | IN_PROGRESS | Replay mode and detector state are exposed; production build passes; real-event browser walkthrough remains |mains |
 | T10 | B | P0 | Query intent, list/count/group and citations | T03,T06 | IN_PROGRESS | Analyst chat now keeps conversation history, offers grounded quick prompts, maps natural language into six controlled categories, and returns clickable citations/clarification suggestions; query tests cover the expanded taxonomy. Frozen retrieval evaluation remains |
 | T11 | B | P0 | Confirm/reject reviews, retention and recovery | T08 | TODO | Retry/restart/expiry test results |
 | T12 | A+C | P0 | Frozen B0/C1 comparison and error analysis | T02,T06,T08 | IN_PROGRESS | Added deterministic one-to-one event scorer and CLI for raw TP/FP/FN, per-class precision/recall, false alerts/hour, and p50/p95 latency. Frozen labeled footage and real B0/C1 predictions remain |
 | T13 | All | P0 | Soak, offline rehearsal and demo backup | T09,T10,T11,T12 | TODO | 30-minute log, disconnected run, labeled recording |
 | T14 | All | P1 | Second camera, RTSP, zone editor, refinement | T13 | TODO | Admit only with spare time and repeated resource test |
 | T15 | A | P1 | Optional vLLM/speculative-decoding feasibility trial | T12 | TODO | Profile first; CUT if unsupported, no headroom or no end-to-end gain |
+| T16 | A | P1 | User-requested action classification pilot | T02,T04,T08 | IN_PROGRESS | Six integrated replays/29 windows and deterministic tests recorded in `reports/action-pilot-20261016.json`; independently verified labels, false-positive evaluation, held-out-camera and normal-footage results are still required |
 
 ## Measurements
 
 | Measurement | Current value |
 |---|---|
-| Actual free VRAM / app budget | Not measured |
-| Selected model revision/runtime/quantization | Not selected; initial candidate in techspec |
-| Source/session counts in validation and test | Not collected |
+| Actual free VRAM / app budget | 4838 MiB free in a 6144 MiB RTX 3060 Laptop snapshot; provisional 3814 MiB after reserve; no soak measurement |
+| Selected model revision/runtime/quantization | SmolVLM2-500M pinned revision and local runtime tested; not quality-validated or production-selected |
+| Source/session counts in validation and test | Six AVI sources; no confirmed labels or source-separated frozen splits |
 | Per-class event precision and recall | Not measured |
 | Normal footage hours and false alerts | Not measured |
 | B0/C1 calls per minute and recall difference | Not measured |
 | Alert p50/p95 and missed-event count | Not measured |
-| Peak memory and missed audit deadlines | Not measured |
+| Peak memory and missed audit deadlines | 1106.82 MiB PyTorch allocated in one smoke; audit deadlines not integrated/measured |
 | Chat exact-match and citation validity | Not measured |
 
 ## Decision/change log
