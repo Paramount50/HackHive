@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
+from .chat import HybridQueryEngine, MiniLMEmbedder, Qwen3LocalModel, SemanticRanker
 from .contracts import Category, FixtureAnalysis, NaturalQueryRequest, QueryIntent, ReplayStartRequest, ReviewRequest, ReviewStatus, utc_now_ms
 from .ingest.manager import ReplayManager
 from .inference.service import SemanticInferenceService, SemanticJob
@@ -18,7 +19,7 @@ from .orchestrator import EventOrchestrator
 from .perception.action import XClipActionClassifier
 from .perception.pipeline import PerceptionPipeline, ScenePolicy, YoloDetector
 from .perception.rules import CandidateRules, Detection
-from .query import QueryClarification, parse_natural_query
+from .query import QueryClarification
 from .storage import Store
 from .uploads import UploadValidationError, save_recording_upload
 
@@ -41,6 +42,15 @@ if vlm_sampling_strategy not in {"swift", "uniform"}:
     raise ValueError("HACKHIVE_VLM_SAMPLING must be swift or uniform")
 vlm_service: SemanticInferenceService | None = None
 vlm_service_lock = Lock()
+chat_enabled = os.environ.get("HACKHIVE_CHAT_ENABLED", "1").strip().lower() not in {"0", "false", "no"}
+chat_model_dir = Path(os.environ.get("HACKHIVE_CHAT_MODEL_DIR", "models/qwen3-0.6b")).resolve()
+embedding_model_dir = Path(os.environ.get("HACKHIVE_EMBEDDING_MODEL_DIR", "models/all-minilm-l6-v2")).resolve()
+chat_device = os.environ.get("HACKHIVE_CHAT_DEVICE", "cpu").strip().lower()
+if chat_device not in {"cpu", "cuda"}:
+    raise ValueError("HACKHIVE_CHAT_DEVICE must be cpu or cuda")
+chat_model: Qwen3LocalModel | None = None
+semantic_ranker: SemanticRanker | None = None
+query_models_lock = Lock()
 
 
 def get_action_classifier() -> XClipActionClassifier | None:
@@ -79,6 +89,21 @@ def get_vlm_service() -> SemanticInferenceService | None:
             )
             vlm_service.start()
         return vlm_service
+
+
+def get_query_engine() -> HybridQueryEngine:
+    """Create an engine over the current authoritative Store with lazy local models."""
+    global chat_model, semantic_ranker
+    if not chat_enabled:
+        return HybridQueryEngine(store)
+    with query_models_lock:
+        if chat_model is None and (chat_model_dir / "hackhive-chat-model.json").is_file():
+            chat_model = Qwen3LocalModel(chat_model_dir, device=chat_device)
+        if semantic_ranker is None and (
+            embedding_model_dir / "hackhive-embedding-model.json"
+        ).is_file():
+            semantic_ranker = SemanticRanker(MiniLMEmbedder(embedding_model_dir))
+    return HybridQueryEngine(store, text_model=chat_model, ranker=semantic_ranker)
 
 
 def public_replay_status(result: dict[str, Any]) -> dict[str, Any]:
@@ -134,6 +159,24 @@ def status() -> dict[str, Any]:
         "model_revision": None,
         "selection_strategy": vlm_sampling_strategy,
     }
+    query_status = {
+        "enabled": chat_enabled,
+        "state": (
+            "disabled" if not chat_enabled
+            else "ready" if chat_model is not None and semantic_ranker is not None
+            else "available" if (
+                (chat_model_dir / "hackhive-chat-model.json").is_file()
+                and (embedding_model_dir / "hackhive-embedding-model.json").is_file()
+            ) else "not_configured"
+        ),
+        "model_id": "Qwen/Qwen3-0.6B" if (chat_model_dir / "hackhive-chat-model.json").is_file() else None,
+        "embedding_model_id": (
+            "sentence-transformers/all-MiniLM-L6-v2"
+            if (embedding_model_dir / "hackhive-embedding-model.json").is_file() else None
+        ),
+        "device": chat_device if chat_enabled else None,
+        "local_only": True,
+    }
     if not detector_ready:
         analysis_message = "Install ultralytics and add local YOLO weights to enable replay event analysis."
     elif action_model_ready:
@@ -164,6 +207,7 @@ def status() -> dict[str, Any]:
         },
         "policy": "Visual evidence only; no access feed",
         "timezone": "Asia/Kolkata",
+        "query": query_status,
     }
 
 
@@ -431,45 +475,31 @@ def run_perception_fixture() -> dict[str, Any]:
 
 @app.post("/api/query")
 def query(request: QueryIntent | NaturalQueryRequest) -> dict[str, Any]:
-    if isinstance(request, NaturalQueryRequest):
-        try:
-            intent = parse_natural_query(request)
-        except QueryClarification as exc:
-            return {
-                "answer": str(exc), "needs_clarification": True, "events": [],
-                "citations": [], "timezone": request.timezone,
-                "suggestions": [
-                    "Show suspected tailgating today",
-                    "How many crowd gatherings were recorded?",
-                    "List person-down incidents from the last hour",
-                ],
-            }
-    else:
-        intent = request
-    result = store.list_events(intent)
-    if intent.operation == "count":
-        answer = f"{len(result)} matching recorded incidents."
-    elif intent.operation == "group":
-        grouped: dict[str, int] = {}
-        for item in result:
-            key = item["camera_name"] if intent.group_by == "camera" else item["category"]
-            grouped[key] = grouped.get(key, 0) + 1
-        answer = grouped
-    else:
-        answer = "No matching recorded incidents." if not result else f"{len(result)} matching recorded incidents."
-    fixture_sessions = store.connection.execute(
+    suggestions = [
+        "Show suspected tailgating today",
+        "How many crowd gatherings were recorded?",
+        "Did anyone appear to be lying on the ground?",
+        "What unusual incidents happened on camera 1 this morning?",
+    ]
+    engine = get_query_engine()
+    try:
+        response = engine.execute(request)
+    except QueryClarification as exc:
+        return {
+            "answer": str(exc), "needs_clarification": True, "events": [],
+            "citations": [],
+            "retrieval_mode": None,
+            "timezone": request.timezone if isinstance(request, NaturalQueryRequest) else "Asia/Kolkata",
+            "suggestions": suggestions,
+        }
+    fixture_sessions = engine.store.connection.execute(
         "SELECT COUNT(*) FROM stream_sessions WHERE mode='offline_eval'"
     ).fetchone()[0]
-    replay_sessions = store.connection.execute(
+    replay_sessions = engine.store.connection.execute(
         "SELECT COUNT(*) FROM stream_sessions WHERE mode='replay'"
     ).fetchone()[0]
     return {
-        "answer": answer,
-        "needs_clarification": False,
-        "filters": intent.model_dump(mode="json"),
-        "timezone": "Asia/Kolkata",
-        "events": result,
-        "citations": [{"event_id": item["event_id"]} for item in result],
+        **response,
         "coverage": {
             "fixture_sessions": fixture_sessions,
             "replay_sessions": replay_sessions,
@@ -478,9 +508,5 @@ def query(request: QueryIntent | NaturalQueryRequest) -> dict[str, Any]:
                 if fixture_sessions else "Results include locally replayed footage only."
             ),
         },
-        "suggestions": [
-            "Show suspected tailgating today",
-            "How many crowd gatherings were recorded?",
-            "List person-down incidents from the last hour",
-        ],
+        "suggestions": suggestions,
     }

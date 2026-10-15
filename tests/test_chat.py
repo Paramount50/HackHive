@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pytest
+from fastapi.testclient import TestClient
 
 from backend.chat import HybridQueryEngine, ModelRoutingDecision, SemanticRanker
 from backend.contracts import FixtureAnalysis, NaturalQueryRequest
@@ -164,3 +165,23 @@ def test_system_dismissed_events_keep_existing_default_exclusion() -> None:
     ))
     assert person not in {item["event_id"] for item in result["events"]}
     assert crowd in {item["event_id"] for item in result["events"]}
+
+
+def test_query_api_exposes_hybrid_provenance_and_real_citations(monkeypatch) -> None:
+    from backend import main
+
+    store, person, _ = populated_store()
+    query_engine = engine(store, FakeQwen())
+    monkeypatch.setattr(main, "get_query_engine", lambda: query_engine)
+    with TestClient(main.app) as client:
+        response = client.post("/api/query", json={
+            "question": "Did anyone appear to be lying on the ground?",
+            "timezone": "Asia/Kolkata",
+            "now_utc_ms": NOW,
+        })
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["retrieval_mode"] == "hybrid"
+    assert payload["model"]["id"] == "fixture://qwen3-0.6b"
+    assert payload["retrieval"]["structured_candidates"] == 1
+    assert payload["citations"] == [{"event_id": person}]

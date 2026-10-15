@@ -132,7 +132,8 @@ function QueryPanel({ onSelect, onError }) {
   const suggestions = [
     "Show suspected tailgating today",
     "How many crowd gatherings were recorded?",
-    "List person-down incidents from the last hour"
+    "Did anyone appear to be lying on the ground?",
+    "What unusual incidents happened on camera 1 this morning?"
   ];
 
   async function ask(event, promptedQuestion = question) {
@@ -165,10 +166,13 @@ function QueryPanel({ onSelect, onError }) {
           <div className="chat-question"><span className="chat-role">YOU</span>{asked}</div>
           <div className={result.needs_clarification ? "query-answer clarification" : "query-answer"}>
             <strong>{typeof result.answer === "string" ? result.answer : JSON.stringify(result.answer)}</strong>
+            {result.retrieval_mode && <span className="metadata">Retrieval: {result.retrieval_mode} · {result.citations?.length ?? 0} recorded source(s)</span>}
+            {result.model?.id && <span className="metadata">Local model: {result.model.id}</span>}
+            {result.retrieval?.degraded_reason && <span className="metadata">Fallback: {result.retrieval.degraded_reason}</span>}
             {result.filters && <span className="metadata">Applied filters: {JSON.stringify(result.filters)}</span>}
             {result.needs_clarification && <span className="metadata">Try one of the supported prompts above.</span>}
             {result.events?.map((event) => <button className="query-result" key={event.event_id} onClick={() => onSelect(event)}>
-              <span>{labels[event.category] ?? event.category}</span><small>{event.summary}</small><code>Citation · {event.event_id}</code>
+              <span>{labels[event.category] ?? event.category}</span><small>{event.summary}</small>{event.semantic_score != null && <small>Semantic match · {Math.round(event.semantic_score * 100)}%</small>}<code>Citation · {event.event_id}</code>
             </button>)}
           </div>
         </div>)}
