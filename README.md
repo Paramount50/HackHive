@@ -62,3 +62,9 @@ The scorer uses one-to-one same-source, same-category temporal matching and
 reports raw counts alongside precision, recall, false alerts per hour, and
 alert-latency percentiles. Commit the small manifests and metrics, not footage
 or model weights.
+
+Validate a source-separated JSONL dataset manifest before generating predictions:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\validate_manifest.py evaluation\manifest.jsonl
+```

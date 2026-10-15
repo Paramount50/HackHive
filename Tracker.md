@@ -23,7 +23,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | ID | Owner | Priority | Task | Depends on | Status | Acceptance evidence to attach |
 |---|---|---|---|---|---|---|
 | T01 | A | P0 | Hardware budget and local four-frame smoke test | — | TODO | Environment/config, 20-request log, peak memory |
-| T02 | C | P0 | Safe fixtures, labels, split manifest | — | TODO | Source hashes, labels, non-overlapping source groups |
+| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | JSONL manifest contract and validator enforce source hashes, provenance/license, supported labels, interval validity, unique samples and source-level split isolation; actual footage and labels remain to collect |
 | T03 | B | P0 | SQLite/API skeleton and validated contracts | — | DONE | `backend/storage.py`, `backend/contracts.py`, `backend/main.py`; `pytest -q` passes 5 tests covering unknown outcomes, merge deduplication, idempotent review, time filtering, fixture API and citations |
 | T04 | B | P0 | Paced replay/webcam, timestamps, ring buffer | T03 | IN_PROGRESS | Real replay runs in a bounded background worker with safe local path resolution and start/status/stop APIs; webcam capture remains pending |
 | T05 | A | P0 | CPU detection/tracking and temporal candidates | T04 | IN_PROGRESS | Added a lazy YOLO adapter, deterministic CPU IoU tracker, normalized zone/gate state, one-shot line crossings, and candidate integration in `backend/perception/pipeline.py`; real weights and ByteTrack comparison remain a GPU-owner handoff |
