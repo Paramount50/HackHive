@@ -58,3 +58,24 @@ def parse_observation(raw: str, frame_count: int) -> VisualObservation:
         if len(set(observation.frame_indices)) != len(observation.frame_indices):
             raise ValueError("duplicate frame reference")
     return value
+
+
+def generation_schema() -> dict:
+    """Compact generation schema; semantic validation still runs afterward."""
+    alternatives = []
+    for outcome, predicates in PREDICATES.items():
+        schema = VisualObservation.model_json_schema()
+        schema["properties"]["outcome"] = {"type": "string", "enum": [outcome]}
+        schema["properties"]["summary"]["maxLength"] = 160
+        schema["properties"]["limitations"] = {
+            "type": "array", "maxItems": 2, "items": {"type": "string", "maxLength": 120}}
+        # The visual model has no access logs. Keep this predicate for the policy layer.
+        allowed = sorted(predicates - {"access_mismatch"})
+        observation = schema.pop("$defs")["Observation"]
+        observation["properties"]["predicate"] = {"type": "string", "enum": allowed or ["unused"]}
+        observation["properties"]["frame_indices"]["items"] = {
+            "type": "integer", "minimum": 0, "maximum": 3}
+        schema["properties"]["observations"] = {
+            "type": "array", "maxItems": 2 if allowed else 0, "items": observation}
+        alternatives.append(schema)
+    return {"anyOf": alternatives}

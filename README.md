@@ -29,6 +29,12 @@ SHA256 digests. Run `smoke_vlm.py --download` afterward to finish metadata setup
 The CUDA wheel is retained under `data/wheels/` for offline reinstall; model weights
 stay under `models/`. Both are excluded from Git.
 
+Generation uses local JSON-constrained decoding and a 256-token ceiling, followed
+by independent semantic validation. `--unconstrained` enables a diagnostic comparison.
+Prompt-only pilots failed formatting; constrained pilots returned valid JSON but
+abstained (`unknown`). Valid JSON is not detection accuracy, and this model configuration
+must not auto-accept incidents. Inspect outcome counts and raw responses before integration.
+
 Each run creates a new `reports/vlm-<UTC timestamp>/` directory containing source
 hashes, hardware, exact model/prompt/runtime configuration, raw outputs and failures,
 per-request timings, peak PyTorch memory, and summary counts. Warm-up is separate.

@@ -1,0 +1,4 @@
+{
+  "stage": "load",
+  "error": "Could not import module 'SmolVLMProcessor'. Are this object's requirements defined correctly?"
+}

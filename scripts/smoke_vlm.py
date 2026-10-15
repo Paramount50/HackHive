@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 import json
 import math
@@ -53,7 +54,8 @@ def main():
     parser.add_argument("--model-dir", type=Path, default=Path("models/smolvlm2-500m"))
     parser.add_argument("--videos", type=Path)
     parser.add_argument("--requests", type=int, default=20)
-    parser.add_argument("--max-new-tokens", type=int, default=128)
+    parser.add_argument("--max-new-tokens", type=int, default=256)
+    parser.add_argument("--unconstrained", action="store_true", help="Diagnostic prompt-only comparison")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.hardware_only:
@@ -80,7 +82,7 @@ def main():
             manifest.append({"file": path.name, "sha256": hashlib.file_digest(source, "sha256").hexdigest()})
     (output / "sources.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     (output / "hardware.json").write_text(json.dumps(hardware_report(), indent=2), encoding="utf-8")
-    worker = SmolVLMWorker(args.model_dir, max_new_tokens=args.max_new_tokens)
+    worker = SmolVLMWorker(args.model_dir, max_new_tokens=args.max_new_tokens, constrained=not args.unconstrained)
     try:
         metadata = worker.load()
     except Exception as exc:
@@ -113,10 +115,15 @@ def main():
             if result.get("error_code") == "gpu_out_of_memory":
                 break
     valid = sum(item["status"] == "completed" for item in results)
+    outcomes = Counter(item["observation"]["outcome"] for item in results
+                       if item.get("observation") is not None)
     timings = [item["timings_ms"]["total"] for item in results if "timings_ms" in item]
     summary = {"mode": "offline_smoke", "requested": args.requests, "attempted": len(results),
                "valid_outputs": valid, "failed_outputs": len(results)-valid,
                "valid_output_rate": valid/len(results) if results else None,
+               "outcome_counts": dict(outcomes),
+               "unknown_outputs": outcomes["unknown"],
+               "quality_validated": False,
                "request_ms_p50": percentile(timings, .5), "request_ms_p95": percentile(timings, .95),
                "peak_allocated_mib": max((item.get("peak_allocated_mib", 0) for item in results), default=0),
                "limitations": ["Unlabelled footage; no accuracy or recall claim.",

@@ -46,6 +46,16 @@ The first pilot in `reports/vlm-pilot-20261015/` stopped at RAM admission before
 loading weights (2860 MiB available, 3072 MiB required). This is not a model inference
 failure or a successful benchmark; the raw failure, source hashes and hardware are saved.
 
+Stage 6: added matching torchvision 0.24.1+cu126 after the processor exposed that
+dependency. Real GPU generation now works. Prompt-only pilots (`r3`, `v2`) returned
+zero valid outputs out of two measured requests each. Local constrained decoding
+with lm-format-enforcer 0.11.3 produced 2/2 valid outputs in the `json` pilot, but both
+were `unknown` and repeated the example wording. This demonstrates runtime/format
+success, not useful recognition. Peak allocated GPU memory was 1106.82 MiB; measured
+pilot request times were approximately 5.02 and 6.36 seconds. All 54 tests pass.
+GPU admission now takes the lower of NVIDIA and PyTorch free-memory reports because
+they differed on this Windows host. The 20-request smoke is being recorded separately.
+
 Updated: 2026-10-15. This tracker records evidence, not intentions. The first CPU-only backend slice is implemented; real model and performance work remain unrun.
 
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
