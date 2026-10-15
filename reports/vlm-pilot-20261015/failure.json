@@ -1,0 +1,4 @@
+{
+  "stage": "load",
+  "error": "Less than 3 GiB system RAM available; free memory before model loading"
+}

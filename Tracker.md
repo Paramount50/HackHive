@@ -37,6 +37,15 @@ and worker execution are separately serialized; explicit handler failures are pr
 All 50 tests pass. Counters are process-local; B still needs durable coverage logging,
 and the application still needs the periodic audit producer and model-worker wiring.
 
+Stage 5: CUDA PyTorch 2.9.1+cu126 and Transformers 4.57.6 are installed in `.venv`;
+CUDA reports available and identifies the RTX 3060 Laptop. Model classes import,
+`pip check` reports no broken requirements, and all 52 tests pass. The model weights
+and CUDA wheel were downloaded with SHA256-verified resumable chunks after full-file
+transfers stalled. `requirements-gpu.txt` records the runtime/import-tested versions.
+The first pilot in `reports/vlm-pilot-20261015/` stopped at RAM admission before
+loading weights (2860 MiB available, 3072 MiB required). This is not a model inference
+failure or a successful benchmark; the raw failure, source hashes and hardware are saved.
+
 Updated: 2026-10-15. This tracker records evidence, not intentions. The first CPU-only backend slice is implemented; real model and performance work remain unrun.
 
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).

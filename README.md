@@ -18,10 +18,16 @@ From the HackHive directory, using a Python 3.12 virtual environment:
 .\.venv\Scripts\python.exe scripts\smoke_vlm.py --videos ..\sample_videos --requests 20
 ```
 
-The worker requires CUDA PyTorch, Transformers 4.x with SmolVLM2 support, Pillow,
-and num2words, in addition to `requirements.txt`. Tested versions will be recorded
-in each run's `environment.txt`; a model run must succeed before treating a runtime
-configuration as validated. Use the official PyTorch CUDA wheel index for Windows.
+The worker's runtime dependencies are in `requirements-gpu.txt`. CUDA availability
+and model-class imports have been verified with the pinned versions on this laptop;
+model generation is a separate validation gate. Each run records its full
+`environment.txt`. Use the official PyTorch CUDA wheel index for Windows.
+
+If large full-file downloads stall, `scripts/download_gpu_assets.py torch` and
+`scripts/download_gpu_assets.py model` resume bounded chunks and verify official
+SHA256 digests. Run `smoke_vlm.py --download` afterward to finish metadata setup.
+The CUDA wheel is retained under `data/wheels/` for offline reinstall; model weights
+stay under `models/`. Both are excluded from Git.
 
 Each run creates a new `reports/vlm-<UTC timestamp>/` directory containing source
 hashes, hardware, exact model/prompt/runtime configuration, raw outputs and failures,
