@@ -1,5 +1,50 @@
 # HackHive local event desk
 
+## Person A: local GPU smoke test
+
+The standalone worker is `backend/inference/smolvlm.py`. It serializes requests,
+loads only local safetensors/configuration, and returns observations rather than
+automatically accepting incidents. The existing replay API is not yet wired to it.
+The six-category application taxonomy remains unchanged; the VLM boundary currently
+implements only the three planned P0 categories plus `none` and `unknown`.
+
+From the HackHive directory, using a Python 3.12 virtual environment:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --hardware-only
+# One-time network setup (model revision is pinned in the adapter):
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --download
+# Local-only inference after setup; keep models and videos on disk:
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py --videos ..\sample_videos --requests 20
+```
+
+The worker requires CUDA PyTorch, Transformers 4.x with SmolVLM2 support, Pillow,
+and num2words, in addition to `requirements.txt`. Tested versions will be recorded
+in each run's `environment.txt`; a model run must succeed before treating a runtime
+configuration as validated. Use the official PyTorch CUDA wheel index for Windows.
+
+Each run creates a new `reports/vlm-<UTC timestamp>/` directory containing source
+hashes, hardware, exact model/prompt/runtime configuration, raw outputs and failures,
+per-request timings, peak PyTorch memory, and summary counts. Warm-up is separate.
+There is no hosted inference fallback, model-generated SQL, or automatic DB write.
+Malformed JSON is a failed analysis, never a normal scene. No automatic retry is
+used in the smoke test, so first-attempt validity is visible.
+
+These are offline sampled windows, not a real-time benchmark or event precision/recall
+evaluation. Windows use four distinct frames spanning up to four seconds, and PTS
+is estimated from frame index/FPS. Label footage and verify timestamps before formal
+evaluation. Smaller clips may yield repeated windows across requests. Source rights,
+split membership, and expected events must be recorded before benchmark use.
+
+Admission requires at least 3 GiB free system RAM and 1800 MiB GPU budget, with the
+budget capped at 4 GiB and a 1 GiB free-VRAM reserve. This is a conservative startup
+gate, not a guarantee against competing applications. PyTorch allocator limits do
+not include all driver/context memory. The adapter uses bfloat16 + SDPA, one native
+512-pixel image tile per frame, and disables image splitting. This deliberately
+differs from the proposed 384-pixel seed to match the model's native image tokens.
+See the official [model card](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M-Video-Instruct)
+and [processor documentation](https://huggingface.co/docs/transformers/v4.57.1/model_doc/smolvlm).
+
 The first runnable slice is a CPU-only deterministic fixture path. It deliberately
 does not claim real model inference: fixture responses are marked in API responses,
 status, and query coverage. The inference adapter can be replaced by the local

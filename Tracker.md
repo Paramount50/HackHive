@@ -14,6 +14,15 @@ RAM: 6331/16236 MiB after the user closed applications. These are snapshots, not
 minimum-free-memory measurements over a soak. Six user-provided AVI files exist in
 the sibling `sample_videos` directory; labels and footage provenance remain unverified.
 
+Stage 2: added the local-only serialized SmolVLM2 adapter and `scripts/smoke_vlm.py`.
+The runner samples real video, pins the model revision, saves source hashes and raw
+failed/successful responses, excludes warm-up, and records runtime/memory/timings.
+All 42 tests pass (one upstream Starlette/AnyIO deprecation warning). Six supplied
+AVI files decode into four ordered frames each. GPU execution remains pending
+dependency/model downloads at this stage. No detection accuracy, model quality or
+real-time performance is established. Replay integration, ByteTrack, scheduler audit
+fairness, and deterministic policy application remain future stages.
+
 Updated: 2026-10-15. This tracker records evidence, not intentions. The first CPU-only backend slice is implemented; real model and performance work remain unrun.
 
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
