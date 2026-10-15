@@ -24,6 +24,7 @@ button:hover { filter: brightness(1.08); } button.danger { background: #7f1d1d; 
 .drawer { min-height: 440px; } .drawer-header { justify-content: space-between; } .drawer-header button { background: transparent; color: #bfdbfe; }
 .evidence-placeholder { min-height: 180px; display: grid; place-content: center; text-align: center; color: #b8c5d6; background: #0b1220; border: 1px dashed #45617d; border-radius: 8px; margin: 16px 0; }
 .evidence-placeholder span { font-size: 12px; color: #8da1bb; } .empty { color: #8da1bb; } .empty-state { padding: 40px 0; color: #8da1bb; }
+.evidence-media img, .evidence-media video { display: block; width: 100%; max-height: 320px; object-fit: contain; background: #050a12; border: 1px solid #45617d; border-radius: 8px; margin: 16px 0; }
 dt { color: #8da1bb; font-size: 12px; margin-top: 10px; } dd { margin: 2px 0 0; }
 .error { color: #fecaca; border-color: #991b1b; margin-top: 16px; } footer { margin-top: 20px; }
 .replay-control { margin-top: 16px; } .replay-control form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }

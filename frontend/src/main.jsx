@@ -130,10 +130,17 @@ function EventCard({ event, selected, onSelect, onReview }) {
 
 function EvidenceDrawer({ event, onClose }) {
   if (!event) return <aside className="drawer panel empty">Select an incident to inspect its evidence.</aside>;
+  const media = event.media ?? [];
   return (
     <aside className="drawer panel">
       <div className="drawer-header"><h2>Evidence</h2><button onClick={onClose}>Close</button></div>
-      <div className="evidence-placeholder">Full-scene fixture frame<br /><span>Media state is explicitly recorded, no real clip yet.</span></div>
+      <div className="evidence-media">
+        {media.filter((item) => item.status === "ready" && item.kind === "keyframe").map((item) =>
+          <img key={item.media_id} src={`/api/media/${item.media_id}`} alt="Incident keyframe" />)}
+        {media.filter((item) => item.status === "ready" && item.kind !== "keyframe").map((item) =>
+          <video key={item.media_id} controls preload="metadata" src={`/api/media/${item.media_id}`}>Video playback is unavailable.</video>)}
+        {!media.some((item) => item.status === "ready") && <div className="evidence-placeholder">No playable evidence<br /><span>{media.length ? media.map((item) => `${item.kind}: ${item.status}`).join(" · ") : "No media record was created."}</span></div>}
+      </div>
       <h3>{labels[event.category]}</h3>
       <p>{event.summary}</p>
       <dl>
@@ -193,13 +200,20 @@ function App() {
     } catch (exception) { setError(exception.message); }
   }
 
+  async function selectEvent(event) {
+    try {
+      setSelected(await request(`/api/events/${event.event_id}`));
+      setError("");
+    } catch (exception) { setError(exception.message); }
+  }
+
   return (
     <main>
       <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div><div className="header-actions"><button onClick={() => runFixture()}>Run analysis fixture</button><button onClick={() => runFixture("/api/fixtures/perception-run")}>Run perception fixture</button></div></header>
       <StatusBar status={status} />
       <div className="policy panel"><strong>Fixture mode</strong><span>Simulated access grants</span><span>Timezone: Asia/Kolkata</span><span className="warning">Not real inference</span></div>
       <ReplayControl job={replayJob} onJob={setReplayJob} onError={setError} />
-      <QueryPanel onSelect={setSelected} onError={setError} />
+      <QueryPanel onSelect={selectEvent} onError={setError} />
       {error && <div className="error panel">{error}</div>}
       <section className="workspace">
         <div className="feed panel">
@@ -207,7 +221,7 @@ function App() {
             <select value={category} onChange={(e) => setCategory(e.target.value)}><option value="">All categories</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
           </div>
           <p className="metadata">{message}</p>
-          {events.map((event) => <EventCard key={event.event_id} event={event} selected={selected?.event_id === event.event_id} onSelect={setSelected} onReview={review} />)}
+          {events.map((event) => <EventCard key={event.event_id} event={event} selected={selected?.event_id === event.event_id} onSelect={selectEvent} onReview={review} />)}
           {!events.length && <div className="empty-state">No matching recorded incidents.</div>}
         </div>
         <EvidenceDrawer event={selected} onClose={() => setSelected(null)} />
