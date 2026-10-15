@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from .contracts import FixtureAnalysis, QueryIntent, ReplayStartRequest, ReviewRequest, utc_now_ms
 from .ingest.manager import ReplayManager
@@ -16,6 +16,16 @@ app = FastAPI(title="HackHive Local Event Desk", version="0.1.0")
 store = Store(Path("data") / "hackhive.sqlite")
 store.seed_camera()
 replay_manager = ReplayManager(Path("recordings"), Path("data") / "replay_frames")
+
+
+def public_replay_status(result: dict[str, Any]) -> dict[str, Any]:
+    latest = result.get("latest_frame")
+    if latest:
+        latest = dict(latest)
+        latest.pop("asset_id", None)
+        latest["frame_url"] = f"/api/replays/{result['session_id']}/frame"
+        result = {**result, "latest_frame": latest}
+    return result
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -74,7 +84,7 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     session_id = store.create_session(started, mode="replay")
     try:
-        return replay_manager.start(
+        return public_replay_status(replay_manager.start(
             session_id=session_id,
             camera_id="cam-1",
             source_name=request.source_name,
@@ -82,7 +92,7 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
             sample_fps=request.sample_fps,
             pace=request.pace,
             max_frames=request.max_frames,
-        )
+        ))
     except RuntimeError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
 
@@ -90,7 +100,7 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
 @app.get("/api/replays/{session_id}")
 def replay_status(session_id: str) -> dict[str, Any]:
     try:
-        return replay_manager.status(session_id)
+        return public_replay_status(replay_manager.status(session_id))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="replay session not found") from exc
 
@@ -98,9 +108,20 @@ def replay_status(session_id: str) -> dict[str, Any]:
 @app.post("/api/replays/{session_id}/stop", status_code=202)
 def stop_replay(session_id: str) -> dict[str, Any]:
     try:
-        return replay_manager.stop(session_id)
+        return public_replay_status(replay_manager.stop(session_id))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="replay session not found") from exc
+
+
+@app.get("/api/replays/{session_id}/frame")
+def replay_frame(session_id: str) -> FileResponse:
+    try:
+        path = replay_manager.latest_asset(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="replay session not found") from exc
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="replay has no sampled frame yet")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @app.get("/api/events")

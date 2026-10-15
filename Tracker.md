@@ -30,7 +30,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | T06 | A | P0 | VLM worker, bounded scheduler and audits | T01,T05 | IN_PROGRESS | `backend/inference/scheduler.py` adds bounded single-worker admission, visible queue overflow, expiry, and handler failure states; scheduler tests pass; real VLM worker/audit loop pending |
 | T07 | B | P0 | Passages and simulated grant reconciliation | T03,T05 | IN_PROGRESS | SQLite passage/grant operations use stable dedupe keys and transactional grant consumption; retry test passes, while normal unmatched/two-grant cases remain pending |
 | T08 | B | P0 | Event merging, keyframes, event/earlier-context clip export | T03,T04,T06 | TODO | One incident, one ID, seekable context, partial state |
-| T09 | C | P0 | Dashboard, evidence drawer, visible failure states | T03,T08 | IN_PROGRESS | React/Vite dashboard added under `frontend/`; `npm run build` succeeds and browser smoke test verified fixture list, category filter, evidence drawer, and review controls; real media walkthrough pending |
+| T09 | C | P0 | Dashboard, evidence drawer, visible failure states | T03,T08 | IN_PROGRESS | React dashboard includes fixture review plus real replay start/stop controls, live worker state, sampled-frame count, failure text, and latest-frame preview; event media walkthrough remains pending |
 | T10 | B | P0 | Query intent, list/count/group and citations | T03,T06 | TODO | Frozen question results and SQL-filter tests |
 | T11 | B | P0 | Confirm/reject reviews, retention and recovery | T08 | TODO | Retry/restart/expiry test results |
 | T12 | A+C | P0 | Frozen B0/C1 comparison and error analysis | T02,T06,T08 | TODO | Configs, predictions, timing logs, raw metrics |

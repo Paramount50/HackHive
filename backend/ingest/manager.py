@@ -144,3 +144,11 @@ class ReplayManager:
             if job.status in {"starting", "running"}:
                 job.status = "stopping"
         return self.status(session_id)
+
+    def latest_asset(self, session_id: str) -> Path | None:
+        with self._lock:
+            job = self._jobs.get(session_id)
+            if job is None:
+                raise KeyError(session_id)
+            latest = job.buffer.latest
+            return Path(latest.asset_id) if latest else None

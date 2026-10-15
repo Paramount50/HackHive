@@ -214,7 +214,17 @@ def test_replay_api_starts_background_job_and_rejects_path_escape(tmp_path, monk
         )
         assert response.status_code == 202
         session_id = response.json()["session_id"]
-        assert client.get(f"/api/replays/{session_id}").status_code == 200
+        deadline = monotonic() + 3
+        status = client.get(f"/api/replays/{session_id}")
+        while status.json()["latest_frame"] is None and monotonic() < deadline:
+            sleep(0.01)
+            status = client.get(f"/api/replays/{session_id}")
+        assert status.status_code == 200
+        assert "asset_id" not in status.json()["latest_frame"]
+        assert status.json()["latest_frame"]["frame_url"].endswith("/frame")
+        frame = client.get(f"/api/replays/{session_id}/frame")
+        assert frame.status_code == 200
+        assert frame.headers["content-type"] == "image/jpeg"
 
         escaped = client.post("/api/replays", json={"source_name": "../outside.avi"})
         assert escaped.status_code == 400

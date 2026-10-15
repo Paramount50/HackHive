@@ -7,6 +7,7 @@ const labels = {
   crowd_gathering: "Crowd gathering",
   suspected_tailgating: "Suspected tailgating"
 };
+const terminalReplayStates = new Set(["completed", "failed", "stopped"]);
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -21,6 +22,53 @@ function StatusBar({ status }) {
       <div><span className="eyebrow">HEALTH</span><strong>{status?.source?.health ?? "loading"}</strong></div>
       <div><span className="eyebrow">ANALYSIS</span><strong className="warning">Degraded · fixture</strong></div>
       <div><span className="eyebrow">POLICY</span><strong>{status?.policy ?? "loading"}</strong></div>
+    </section>
+  );
+}
+
+function ReplayControl({ job, onJob, onError }) {
+  const [sourceName, setSourceName] = useState("demo.mp4");
+  const [sampleFps, setSampleFps] = useState(5);
+
+  useEffect(() => {
+    if (!job?.session_id || terminalReplayStates.has(job.status)) return undefined;
+    const timer = window.setInterval(() => {
+      request(`/api/replays/${job.session_id}`).then(onJob).catch((exception) => onError(exception.message));
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [job?.session_id, job?.status]);
+
+  async function start(event) {
+    event.preventDefault();
+    try {
+      onJob(await request("/api/replays", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source_name: sourceName, sample_fps: Number(sampleFps), pace: true })
+      }));
+      onError("");
+    } catch (exception) { onError(exception.message); }
+  }
+
+  async function stop() {
+    try { onJob(await request(`/api/replays/${job.session_id}/stop`, { method: "POST" })); }
+    catch (exception) { onError(exception.message); }
+  }
+
+  return (
+    <section className="replay-control panel">
+      <form onSubmit={start}>
+        <div><span className="eyebrow">REAL VIDEO REPLAY</span><strong>Decode a server-local recording</strong></div>
+        <label>File in recordings/<input value={sourceName} onChange={(event) => setSourceName(event.target.value)} required /></label>
+        <label>Sample FPS<input type="number" min="0.5" max="10" step="0.5" value={sampleFps} onChange={(event) => setSampleFps(event.target.value)} /></label>
+        <button type="submit" disabled={job && !terminalReplayStates.has(job.status)}>Start replay</button>
+        {job && !terminalReplayStates.has(job.status) && <button type="button" className="secondary" onClick={stop}>Stop</button>}
+      </form>
+      {job && <div className="replay-progress">
+        <div><span className={`job-state ${job.status}`}>{job.status}</span><strong>{job.frame_count} sampled frame(s)</strong><span className="metadata">{job.source_name}</span></div>
+        {job.latest_frame && <img src={`${job.latest_frame.frame_url}?v=${job.frame_count}`} alt="Latest sampled replay frame" />}
+        {job.error && <span className="error-text">{job.error}</span>}
+      </div>}
     </section>
   );
 }
@@ -71,6 +119,7 @@ function App() {
   const [category, setCategory] = useState("");
   const [message, setMessage] = useState("Loading recorded incidents…");
   const [error, setError] = useState("");
+  const [replayJob, setReplayJob] = useState(null);
 
   async function loadEvents() {
     try {
@@ -112,6 +161,7 @@ function App() {
       <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div><div className="header-actions"><button onClick={() => runFixture()}>Run analysis fixture</button><button onClick={() => runFixture("/api/fixtures/perception-run")}>Run perception fixture</button></div></header>
       <StatusBar status={status} />
       <div className="policy panel"><strong>Fixture mode</strong><span>Simulated access grants</span><span>Timezone: Asia/Kolkata</span><span className="warning">Not real inference</span></div>
+      <ReplayControl job={replayJob} onJob={setReplayJob} onError={setError} />
       {error && <div className="error panel">{error}</div>}
       <section className="workspace">
         <div className="feed panel">
