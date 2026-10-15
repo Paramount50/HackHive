@@ -31,7 +31,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | T07 | B | P0 | Passages and simulated grant reconciliation | T03,T05 | IN_PROGRESS | SQLite passage/grant operations use stable dedupe keys and transactional grant consumption; retry test passes, while normal unmatched/two-grant cases remain pending |
 | T08 | B | P0 | Event merging, keyframes, event/earlier-context clip export | T03,T04,T06 | IN_PROGRESS | Repeated windows retain one active ID, a 5-second quiet-gap closer records end time, and later recurrence gets a new ID; real keyframe and clip export remain |
 | T09 | C | P0 | Dashboard, evidence drawer, visible failure states | T03,T08 | IN_PROGRESS | React dashboard includes fixture review plus real replay start/stop controls, live worker state, sampled-frame count, failure text, and latest-frame preview; event media walkthrough remains pending |
-| T10 | B | P0 | Query intent, list/count/group and citations | T03,T06 | TODO | Frozen question results and SQL-filter tests |
+| T10 | B | P0 | Query intent, list/count/group and citations | T03,T06 | IN_PROGRESS | Deterministic natural-language parsing now maps category, camera, today/yesterday/relative time and list/count/group into closed `QueryIntent`; unsupported categories return clarification. Frozen event-result set and dashboard chat remain |
 | T11 | B | P0 | Confirm/reject reviews, retention and recovery | T08 | TODO | Retry/restart/expiry test results |
 | T12 | A+C | P0 | Frozen B0/C1 comparison and error analysis | T02,T06,T08 | TODO | Configs, predictions, timing logs, raw metrics |
 | T13 | All | P0 | Soak, offline rehearsal and demo backup | T09,T10,T11,T12 | TODO | 30-minute log, disconnected run, labeled recording |

@@ -6,9 +6,10 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 
-from .contracts import FixtureAnalysis, QueryIntent, ReplayStartRequest, ReviewRequest, utc_now_ms
+from .contracts import FixtureAnalysis, NaturalQueryRequest, QueryIntent, ReplayStartRequest, ReviewRequest, utc_now_ms
 from .ingest.manager import ReplayManager
 from .perception.rules import CandidateRules, Detection
+from .query import QueryClarification, parse_natural_query
 from .storage import Store
 
 
@@ -232,7 +233,17 @@ def run_perception_fixture() -> dict[str, Any]:
 
 
 @app.post("/api/query")
-def query(intent: QueryIntent) -> dict[str, Any]:
+def query(request: QueryIntent | NaturalQueryRequest) -> dict[str, Any]:
+    if isinstance(request, NaturalQueryRequest):
+        try:
+            intent = parse_natural_query(request)
+        except QueryClarification as exc:
+            return {
+                "answer": str(exc), "needs_clarification": True, "events": [],
+                "citations": [], "timezone": request.timezone,
+            }
+    else:
+        intent = request
     result = store.list_events(intent)
     if intent.operation == "count":
         answer = f"{len(result)} matching recorded incidents."
@@ -246,6 +257,7 @@ def query(intent: QueryIntent) -> dict[str, Any]:
         answer = "No matching recorded incidents." if not result else f"{len(result)} matching recorded incidents."
     return {
         "answer": answer,
+        "needs_clarification": False,
         "filters": intent.model_dump(mode="json"),
         "timezone": "Asia/Kolkata",
         "events": result,

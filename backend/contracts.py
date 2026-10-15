@@ -91,6 +91,13 @@ class QueryIntent(BaseModel):
         return value
 
 
+class NaturalQueryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=500)
+    timezone: str = "Asia/Kolkata"
+    now_utc_ms: int | None = None
+
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
