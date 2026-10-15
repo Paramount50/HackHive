@@ -1,0 +1,71 @@
+# Markdown documentation files
+*.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+build/
+
+# Media, database, local storage
+*.sqlite
+*.sqlite3
+*.db
+data/
+*.mp4
+*.avi
+*.mkv
+*.jpg
+*.jpeg
+*.png
+media/
+recordings/
+clips/
+models/
+weights/
+*.pt
+*.onnx
+*.engine
+
+# Environment & IDE
+.env
+.env.local
+.env.*.local
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS / temporary files
+.DS_Store
+Thumbs.db
