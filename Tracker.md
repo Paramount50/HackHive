@@ -176,6 +176,15 @@ rewritten. The supplied fight clip remains out of scope for SmolVLM accuracy bec
 `aggression_fight` is not in its current visual contract. The unverified gun statement
 remains an unconfirmed model claim because source frames were not supplied here.
 
+Generation-constraint audit: `generation_schema()` previously declared JSON Schema
+`uniqueItems`, but the Kaggle LMFE 0.11.3 parser accepted exact duplicate observation
+objects. The local development environment does not install LMFE, so its corresponding
+test is skipped locally and cannot establish a version comparison. The unenforced
+keyword was removed from the LMFE-facing schema. Duplicate predicates remain a
+downstream `invalid_model_output` failure through Pydantic; raw output is preserved and
+never silently deduplicated. Verification: the duplicate-parser regression now asserts
+this boundary explicitly.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

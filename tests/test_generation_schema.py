@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from backend.inference.contracts import generation_schema
+from backend.inference.contracts import generation_schema, parse_observation
 
 
 def accepts(text):
@@ -37,10 +37,21 @@ def test_category_must_be_chosen_before_its_predicates():
                                    "observations": [], "limitations": []}))
 
 
-def test_generation_schema_rejects_exact_duplicate_observation_objects():
+def test_generation_schema_does_not_claim_unenforced_array_uniqueness():
+    for alternative in generation_schema()["anyOf"]:
+        observations = alternative["properties"].get("observations")
+        if observations is not None:
+            assert "uniqueItems" not in observations
+
+
+def test_duplicate_predicates_are_rejected_after_generation():
     duplicate = json.dumps({"outcome": "person_down", "summary": "A person.",
                             "observations": [
                                 {"predicate": "visible_person", "supported": True, "frame_indices": [0]},
                                 {"predicate": "visible_person", "supported": True, "frame_indices": [0]},
                             ], "limitations": []})
-    assert not accepts(duplicate)
+    # LMFE 0.11.3 does not enforce JSON Schema uniqueItems. The downstream
+    # Pydantic contract must reject the raw generated output instead.
+    assert accepts(duplicate)
+    with pytest.raises(ValueError, match="duplicate evidence predicate"):
+        parse_observation(duplicate, 4)

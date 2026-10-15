@@ -116,7 +116,7 @@ def generation_schema() -> dict:
             "type": "integer", "minimum": 0, "maximum": 3}
         schema["properties"]["observations"] = {
             "type": "array", "maxItems": 2 if allowed else 0,
-            "uniqueItems": True, "items": observation}
+            "items": observation}
         if allowed:
             schema["required"] = ["outcome", "summary", "observations", "limitations"]
         else:
