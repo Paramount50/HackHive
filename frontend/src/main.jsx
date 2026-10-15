@@ -5,7 +5,10 @@ import "./styles.css";
 const labels = {
   person_down: "Person down",
   crowd_gathering: "Crowd gathering",
-  suspected_tailgating: "Suspected tailgating"
+  suspected_tailgating: "Suspected tailgating",
+  aggression_fight: "Aggression / fight",
+  fire_smoke: "Fire / smoke",
+  intrusion_unauthorized_access: "Intrusion / unauthorized access"
 };
 const terminalReplayStates = new Set(["completed", "failed", "stopped"]);
 
@@ -80,7 +83,8 @@ function QueryPanel({ onSelect, onError }) {
   const suggestions = [
     "Show suspected tailgating today",
     "How many crowd gatherings were recorded?",
-    "List person-down incidents from the last hour"
+    "List person-down incidents from the last hour",
+    "Were there any fire or smoke incidents today?"
   ];
 
   async function ask(event, promptedQuestion = question) {

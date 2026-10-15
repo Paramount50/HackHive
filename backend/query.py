@@ -21,8 +21,18 @@ CATEGORY_TERMS: dict[Category, tuple[str, ...]] = {
     ),
     Category.SUSPECTED_TAILGATING: (
         "tailgating", "tailgate", "close-following entry",
-        "followed through the door", "multiple people entered after one",
-        "unauthorised access", "unauthorized access",
+        "following through", "followed through the door", "multiple people entered after one",
+    ),
+    Category.AGGRESSION_FIGHT: (
+        "aggression", "aggressive", "fight", "fighting", "assault",
+        "physical confrontation", "people fighting",
+    ),
+    Category.FIRE_SMOKE: (
+        "fire", "smoke", "flames", "burning", "smoke alarm",
+    ),
+    Category.INTRUSION_UNAUTHORIZED_ACCESS: (
+        "intrusion", "intruder", "unauthorized access", "unauthorised access",
+        "break in", "break-in", "trespassing", "unapproved entry",
     ),
 }
 
@@ -58,10 +68,16 @@ def _time_range(text: str, request: NaturalQueryRequest) -> tuple[int | None, in
 def parse_natural_query(request: NaturalQueryRequest) -> QueryIntent:
     text = " ".join(request.question.lower().split())
     categories = [category for category, terms in CATEGORY_TERMS.items() if any(term in text for term in terms)]
-    unsupported = [term for term in ("weapon", "gun", "knife", "fight", "fire", "smoke") if term in text]
+    unsupported = [term for term in ("weapon", "gun", "knife") if term in text]
     if unsupported and not categories:
         raise QueryClarification(
-            f"Unsupported category '{unsupported[0]}'. Choose person down, crowd gathering, or suspected tailgating."
+            f"Unsupported category '{unsupported[0]}'. Choose one of the six supported categories: "
+            "person down, crowd gathering, suspected tailgating, aggression/fight, "
+            "fire/smoke, or intrusion/unauthorized access."
+        )
+    if not categories and not re.search(r"\b(incident|event|recorded|camera|footage|alert)\b", text):
+        raise QueryClarification(
+            "I can search recorded incidents, but I need a category, camera, or incident term."
         )
 
     if re.search(r"\b(how many|count|number of)\b", text):
@@ -71,7 +87,7 @@ def parse_natural_query(request: NaturalQueryRequest) -> QueryIntent:
         operation, group_by = "group", "camera"
     elif re.search(r"\b(by|per)\s+categor(?:y|ies)\b", text):
         operation, group_by = "group", "category"
-    elif re.search(r"\b(show|list|find|which|what|any|are there|did|events?|incidents?)\b", text):
+    elif re.search(r"\b(show|list|find|which|what|any|are there|did|were|was|events?|incidents?)\b", text):
         operation, group_by = "list", None
     else:
         raise QueryClarification("Ask to show, list, count, or group recorded incidents.")

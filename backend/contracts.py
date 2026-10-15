@@ -11,6 +11,9 @@ class Category(StrEnum):
     PERSON_DOWN = "person_down"
     CROWD_GATHERING = "crowd_gathering"
     SUSPECTED_TAILGATING = "suspected_tailgating"
+    AGGRESSION_FIGHT = "aggression_fight"
+    FIRE_SMOKE = "fire_smoke"
+    INTRUSION_UNAUTHORIZED_ACCESS = "intrusion_unauthorized_access"
 
 
 class DecisionState(StrEnum):
@@ -58,7 +61,7 @@ class QueryIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     operation: str = "list"
-    categories: list[Category] = Field(default_factory=list, max_length=3)
+    categories: list[Category] = Field(default_factory=list, max_length=6)
     camera_ids: list[str] = Field(default_factory=list, max_length=20)
     decision_states: list[DecisionState] = Field(
         default_factory=lambda: [DecisionState.ACCEPTED, DecisionState.NEEDS_REVIEW]

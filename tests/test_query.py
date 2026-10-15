@@ -44,11 +44,23 @@ def test_chatbot_maps_natural_synonyms_to_supported_categories() -> None:
         question="Are there large groups of people at the entrance?", now_utc_ms=NOW
     ))
     tailgate_intent = parse_natural_query(NaturalQueryRequest(
-        question="Any unauthorized access or people following through the door?", now_utc_ms=NOW
+        question="Any people following through the door?", now_utc_ms=NOW
+    ))
+    aggression_intent = parse_natural_query(NaturalQueryRequest(
+        question="Were people fighting today?", now_utc_ms=NOW
+    ))
+    fire_intent = parse_natural_query(NaturalQueryRequest(
+        question="Show fire or smoke incidents today", now_utc_ms=NOW
+    ))
+    intrusion_intent = parse_natural_query(NaturalQueryRequest(
+        question="List intruders and trespassing events", now_utc_ms=NOW
     ))
     assert person_intent.categories == ["person_down"]
     assert crowd_intent.categories == ["crowd_gathering"]
     assert tailgate_intent.categories == ["suspected_tailgating"]
+    assert aggression_intent.categories == ["aggression_fight"]
+    assert fire_intent.categories == ["fire_smoke"]
+    assert intrusion_intent.categories == ["intrusion_unauthorized_access"]
 
 
 def test_query_api_returns_clarification_instead_of_guessing() -> None:

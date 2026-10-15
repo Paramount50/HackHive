@@ -8,6 +8,9 @@ class CandidateCategory(StrEnum):
     PERSON_DOWN = "person_down"
     CROWD_GATHERING = "crowd_gathering"
     SUSPECTED_TAILGATING = "suspected_tailgating"
+    AGGRESSION_FIGHT = "aggression_fight"
+    FIRE_SMOKE = "fire_smoke"
+    INTRUSION_UNAUTHORIZED_ACCESS = "intrusion_unauthorized_access"
 
 
 @dataclass(frozen=True)
