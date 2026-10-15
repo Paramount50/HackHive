@@ -8,8 +8,8 @@ perception worker in the next milestone without changing event/query storage.
 ## Run locally
 
 ```powershell
-C:\Users\Ayushmaan\AppData\Local\Programs\Python\Python313\python.exe -m pytest -q
-C:\Users\Ayushmaan\AppData\Local\Programs\Python\Python313\python.exe -m uvicorn backend.main:app --reload
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload
 ```
 
 Open http://127.0.0.1:8000, click **Run deterministic fixture**, then inspect,

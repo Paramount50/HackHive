@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from backend.contracts import FixtureAnalysis, QueryIntent, ReviewRequest
 from backend.storage import Store
-from backend.ingest.replay import BoundedFrameBuffer, FixtureReplay, FramePacket
+from backend.ingest.replay import BoundedFrameBuffer, FixtureReplay, FramePacket, VideoReplay
 
 
 def make_store() -> Store:
@@ -110,3 +112,52 @@ def test_grant_consumption_is_retry_safe() -> None:
     assert first["passage_id"] == retry["passage_id"]
     grant = store.connection.execute("SELECT consumed_passages FROM access_grants").fetchone()
     assert grant["consumed_passages"] == 1
+
+
+def test_real_video_replay_emits_sampled_timestamped_assets(tmp_path) -> None:
+    import cv2
+    import numpy as np
+
+    video = tmp_path / "source.avi"
+    writer = cv2.VideoWriter(
+        str(video), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (64, 48)
+    )
+    assert writer.isOpened()
+    for index in range(10):
+        frame = np.full((48, 64, 3), index * 20, dtype=np.uint8)
+        writer.write(frame)
+    writer.release()
+
+    replay = VideoReplay(
+        video,
+        camera_id="cam-1",
+        session_id="session-real",
+        session_started_utc_ms=1_000_000,
+        asset_dir=tmp_path / "frames",
+        sample_fps=5,
+    )
+    packets = list(replay.frames())
+
+    assert 4 <= len(packets) <= 6
+    assert [packet.source_pts_ms for packet in packets] == sorted(
+        packet.source_pts_ms for packet in packets
+    )
+    assert all(packet.width == 64 and packet.height == 48 for packet in packets)
+    assert all(packet.captured_utc_ms == 1_000_000 + packet.source_pts_ms for packet in packets)
+    assert all(packet.fixture is False for packet in packets)
+    assert all(Path(packet.asset_id).is_file() for packet in packets)
+
+
+def test_real_video_replay_rejects_missing_file(tmp_path) -> None:
+    try:
+        VideoReplay(
+            tmp_path / "missing.mp4",
+            "cam-1",
+            "session-real",
+            1_000,
+            tmp_path / "frames",
+        )
+    except FileNotFoundError:
+        pass
+    else:
+        raise AssertionError("missing video should be rejected")
