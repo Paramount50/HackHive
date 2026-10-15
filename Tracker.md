@@ -85,6 +85,11 @@ and cleans up rejected uploads. Upload and replay remain separate so a recording
 be analyzed repeatedly. Verification: 64 passed, 4 GPU-dependent skipped, plus the
 React production build; no detector-accuracy claim follows from upload validation.
 
+Evidence discovery stage — 2026-10-16: incident-list queries expose a ready keyframe
+media ID and playable-evidence flag without leaking paths. Timeline cards render the
+thumbnail or an explicit unavailable state before the evidence drawer is opened. The
+React category vocabulary now matches all six backend incident categories.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

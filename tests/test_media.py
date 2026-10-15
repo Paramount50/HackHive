@@ -3,7 +3,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from backend.contracts import FixtureAnalysis, MediaStatus
+from backend.contracts import FixtureAnalysis, MediaStatus, QueryIntent
 from backend.ingest.replay import FramePacket
 from backend.media import MediaExporter
 from backend.storage import Store
@@ -55,3 +55,6 @@ def test_ready_artifact_and_missing_fixture_have_distinct_states(tmp_path) -> No
     assert store.get_media(ready_id)["status"] == MediaStatus.READY
     assert store.get_media(ready_id)["sha256"] == artifact.sha256
     assert store.get_media(missing_id)["status"] == MediaStatus.MISSING
+    listed = store.list_events(QueryIntent())
+    assert listed[0]["thumbnail_media_id"] == ready_id
+    assert listed[0]["has_ready_media"] == 1

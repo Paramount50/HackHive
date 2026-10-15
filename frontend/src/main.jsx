@@ -6,7 +6,9 @@ const labels = {
   person_down: "Person down",
   crowd_gathering: "Crowd gathering",
   suspected_tailgating: "Suspected tailgating",
-  aggression_fight: "Possible physical altercation"
+  aggression_fight: "Possible physical altercation",
+  fire_smoke: "Possible fire or smoke",
+  intrusion_unauthorized_access: "Possible unauthorized access"
 };
 const terminalReplayStates = new Set(["completed", "failed", "stopped"]);
 
@@ -176,15 +178,21 @@ function EventCard({ event, selected, onSelect, onReview }) {
   const score = Math.round(event.confidence_score * 4);
   return (
     <article className={`event-card ${selected ? "selected" : ""}`} onClick={() => onSelect(event)}>
+      {event.thumbnail_media_id
+        ? <img className="incident-thumbnail" src={`/api/media/${event.thumbnail_media_id}`} alt="Incident keyframe thumbnail" loading="lazy" />
+        : <div className="incident-thumbnail unavailable">Evidence unavailable</div>}
+      <div className="event-card-body">
       <div className="event-heading">
         <span className={`category ${event.category}`}>{labels[event.category] ?? event.category}</span>
         <span className="review-state">{event.review_status}</span>
       </div>
       <p>{event.summary}</p>
       <div className="metadata">System decision: {event.decision_state} · Evidence score {score}/4 · uncalibrated</div>
+      <div className="metadata">{event.has_ready_media ? "Keyframe or clip available" : "No playable evidence available"}</div>
       <div className="actions">
         <button onClick={(e) => { e.stopPropagation(); onReview(event, "confirm"); }}>Confirm</button>
         <button className="danger" onClick={(e) => { e.stopPropagation(); onReview(event, "reject"); }}>Reject</button>
+      </div>
       </div>
     </article>
   );

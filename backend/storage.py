@@ -435,7 +435,12 @@ class Store:
         return status, [dict(row) for row in rows]
 
     def list_events(self, intent: QueryIntent) -> list[dict[str, Any]]:
-        sql = """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode
+        sql = """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode,
+                 (SELECT m.media_id FROM media m
+                  WHERE m.event_id=e.event_id AND m.kind='keyframe' AND m.status='ready'
+                  ORDER BY m.coverage_start_utc_ms,m.media_id LIMIT 1) AS thumbnail_media_id,
+                 EXISTS(SELECT 1 FROM media em WHERE em.event_id=e.event_id AND em.status='ready')
+                  AS has_ready_media
                  FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
                  JOIN cameras c ON c.camera_id=s.camera_id WHERE 1=1"""
         params: list[Any] = []
