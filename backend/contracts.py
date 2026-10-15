@@ -107,5 +107,21 @@ class ReviewRequest(BaseModel):
         return value
 
 
+class ReplayStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_name: str = Field(min_length=1, max_length=240)
+    sample_fps: float = Field(default=5.0, ge=0.5, le=10.0)
+    pace: bool = True
+    max_frames: int | None = Field(default=None, ge=1, le=10_000)
+
+    @field_validator("source_name")
+    @classmethod
+    def reject_blank_source(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("source_name must not be blank")
+        return value
+
+
 def utc_now_ms() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)

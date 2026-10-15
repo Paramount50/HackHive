@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import monotonic, sleep
 
 from fastapi.testclient import TestClient
 
 from backend.contracts import FixtureAnalysis, QueryIntent, ReviewRequest
 from backend.storage import Store
+from backend.ingest.manager import ReplayManager
 from backend.ingest.replay import BoundedFrameBuffer, FixtureReplay, FramePacket, VideoReplay
 
 
@@ -13,6 +15,20 @@ def make_store() -> Store:
     store = Store()
     store.seed_camera()
     return store
+
+
+def write_test_video(path: Path, frame_count: int = 10) -> None:
+    import cv2
+    import numpy as np
+
+    writer = cv2.VideoWriter(
+        str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (64, 48)
+    )
+    assert writer.isOpened()
+    for index in range(frame_count):
+        frame = np.full((48, 64, 3), index * 20, dtype=np.uint8)
+        writer.write(frame)
+    writer.release()
 
 
 def test_unknown_is_not_an_incident() -> None:
@@ -115,18 +131,8 @@ def test_grant_consumption_is_retry_safe() -> None:
 
 
 def test_real_video_replay_emits_sampled_timestamped_assets(tmp_path) -> None:
-    import cv2
-    import numpy as np
-
     video = tmp_path / "source.avi"
-    writer = cv2.VideoWriter(
-        str(video), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (64, 48)
-    )
-    assert writer.isOpened()
-    for index in range(10):
-        frame = np.full((48, 64, 3), index * 20, dtype=np.uint8)
-        writer.write(frame)
-    writer.release()
+    write_test_video(video)
 
     replay = VideoReplay(
         video,
@@ -161,3 +167,54 @@ def test_real_video_replay_rejects_missing_file(tmp_path) -> None:
         pass
     else:
         raise AssertionError("missing video should be rejected")
+
+
+def test_replay_manager_decodes_in_background_and_reports_latest_frame(tmp_path) -> None:
+    recordings = tmp_path / "recordings"
+    recordings.mkdir()
+    write_test_video(recordings / "hallway.avi")
+    manager = ReplayManager(recordings, tmp_path / "assets", context_frames=3)
+
+    initial = manager.start(
+        session_id="session-background",
+        camera_id="cam-1",
+        source_name="hallway.avi",
+        started_utc_ms=5_000,
+        sample_fps=5,
+        pace=False,
+        max_frames=None,
+    )
+    assert initial["status"] in {"starting", "running", "completed"}
+
+    deadline = monotonic() + 3
+    result = manager.status("session-background")
+    while result["status"] not in {"completed", "failed"} and monotonic() < deadline:
+        sleep(0.01)
+        result = manager.status("session-background")
+
+    assert result["status"] == "completed"
+    assert 4 <= result["frame_count"] <= 6
+    assert result["latest_frame"]["fixture"] is False
+    assert Path(result["latest_frame"]["asset_id"]).is_file()
+
+
+def test_replay_api_starts_background_job_and_rejects_path_escape(tmp_path, monkeypatch) -> None:
+    from backend import main
+
+    recordings = tmp_path / "recordings"
+    recordings.mkdir()
+    write_test_video(recordings / "entrance.avi")
+    manager = ReplayManager(recordings, tmp_path / "assets")
+    monkeypatch.setattr(main, "replay_manager", manager)
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/replays",
+            json={"source_name": "entrance.avi", "pace": False, "max_frames": 2},
+        )
+        assert response.status_code == 202
+        session_id = response.json()["session_id"]
+        assert client.get(f"/api/replays/{session_id}").status_code == 200
+
+        escaped = client.post("/api/replays", json={"source_name": "../outside.avi"})
+        assert escaped.status_code == 400

@@ -21,6 +21,19 @@ The API includes `/api/status`, `/api/events`, `/api/events/{id}`,
 `/api/fixtures/perception-run`. The perception fixture passes deterministic
 CPU detections through temporal candidate rules before storing an event.
 
+To run a real replay, place a video under `recordings/` and start a bounded
+background job:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/replays `
+  -ContentType 'application/json' `
+  -Body '{"source_name":"demo.mp4","sample_fps":5,"pace":true}'
+```
+
+Poll `GET /api/replays/{session_id}` for progress and the latest sampled frame.
+Use `POST /api/replays/{session_id}/stop` to interrupt a paced replay. Source
+paths are confined to `recordings/`, and decoding runs outside the request thread.
+
 ## React dashboard
 
 The dashboard is in `frontend/` and uses Vite with an API proxy for local
