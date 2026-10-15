@@ -112,3 +112,41 @@ def test_crowd_occurrence_merges_when_tracker_ids_change_and_finishes(tmp_path) 
     assert {(item["kind"], item["status"]) for item in media} == {
         ("event_clip", "ready"), ("keyframe", "ready")
     }
+
+
+def test_candidate_submits_four_chronological_frames_once(tmp_path) -> None:
+    packets = []
+    for index in range(5):
+        path = tmp_path / f"semantic-{index}.jpg"
+        assert cv2.imwrite(str(path), np.full((48, 64, 3), index * 20, dtype=np.uint8))
+        packets.append(FramePacket(
+            "cam-1", "semantic-session", index, index * 500, 30_000 + index * 500,
+            64, 48, str(path), False,
+        ))
+    horizontal = BoxDetection(5, 15, 55, 35, 0.9, "person")
+    store = Store()
+    store.seed_camera()
+    store.connection.execute(
+        """INSERT INTO stream_sessions
+        (session_id,camera_id,mode,started_utc_ms,policy_version,policy_json)
+        VALUES ('semantic-session','cam-1','replay',30000,'cam-1-v1','{}')"""
+    )
+    store.connection.commit()
+    submitted = []
+    orchestrator = EventOrchestrator(
+        session_id="semantic-session",
+        session_started_utc_ms=30_000,
+        pipeline=PerceptionPipeline(
+            ScriptedDetector([[horizontal]] * len(packets)),
+            rules=CandidateRules(person_down_persistence_ms=1_500),
+        ),
+        store=store,
+        media=MediaExporter(tmp_path / "semantic-media"),
+        semantic_submit=lambda job: (submitted.append(job), True)[1],
+    )
+    for packet in packets:
+        orchestrator.process(packet)
+
+    assert len(submitted) == 1
+    assert submitted[0].expected_outcome == "person_down"
+    assert submitted[0].source_pts_ms == (0, 500, 1_000, 1_500)

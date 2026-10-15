@@ -11,6 +11,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from .contracts import Category, FixtureAnalysis, NaturalQueryRequest, QueryIntent, ReplayStartRequest, ReviewRequest, ReviewStatus, utc_now_ms
 from .ingest.manager import ReplayManager
+from .inference.service import SemanticInferenceService, SemanticJob
+from .inference.smolvlm import SmolVLMWorker
 from .media import MediaExporter
 from .orchestrator import EventOrchestrator
 from .perception.action import XClipActionClassifier
@@ -22,7 +24,8 @@ from .uploads import UploadValidationError, save_recording_upload
 
 
 app = FastAPI(title="HackHive Local Event Desk", version="0.1.0")
-store = Store(Path("data") / "hackhive.sqlite")
+database_path = Path("data") / "hackhive.sqlite"
+store = Store(database_path)
 store.seed_camera()
 recordings_root = Path(os.environ.get("HACKHIVE_RECORDINGS_DIR", "recordings"))
 max_upload_bytes = int(os.environ.get("HACKHIVE_MAX_UPLOAD_MIB", "250")) * 1024 * 1024
@@ -32,6 +35,9 @@ detector_weights = Path(os.environ.get("HACKHIVE_DETECTOR_WEIGHTS", "models/yolo
 action_model_dir = Path(os.environ.get("HACKHIVE_ACTION_MODEL_DIR", "models/xclip-base-patch32")).resolve()
 action_classifier: XClipActionClassifier | None = None
 action_classifier_lock = Lock()
+vlm_model_dir = Path(os.environ.get("HACKHIVE_VLM_MODEL_DIR", "models/smolvlm2-500m")).resolve()
+vlm_service: SemanticInferenceService | None = None
+vlm_service_lock = Lock()
 
 
 def get_action_classifier() -> XClipActionClassifier | None:
@@ -48,6 +54,27 @@ def get_action_classifier() -> XClipActionClassifier | None:
             except (ImportError, OSError, RuntimeError, ValueError) as exc:
                 raise HTTPException(status_code=503, detail=f"could not initialize local action model: {exc}") from exc
         return action_classifier
+
+
+def _persist_vlm_result(job: SemanticJob, result: dict[str, Any]) -> None:
+    connection = Store(database_path)
+    try:
+        connection.record_vlm_result(job, result)
+    finally:
+        connection.close()
+
+
+def get_vlm_service() -> SemanticInferenceService | None:
+    global vlm_service
+    if not (vlm_model_dir / "hackhive-model.json").is_file():
+        return None
+    with vlm_service_lock:
+        if vlm_service is None:
+            vlm_service = SemanticInferenceService(
+                SmolVLMWorker(vlm_model_dir), _persist_vlm_result, max_pending=3
+            )
+            vlm_service.start()
+        return vlm_service
 
 
 def public_replay_status(result: dict[str, Any]) -> dict[str, Any]:
@@ -94,6 +121,14 @@ def status() -> dict[str, Any]:
         and (action_model_dir / "config.json").is_file()
         and (action_model_dir / "model.safetensors").is_file()
     )
+    semantic_status = vlm_service.snapshot() if vlm_service is not None else {
+        "state": "available" if (vlm_model_dir / "hackhive-model.json").is_file() else "not_configured",
+        "error": None,
+        "pending": 0,
+        "counters": {},
+        "model_id": None,
+        "model_revision": None,
+    }
     if not detector_ready:
         analysis_message = "Install ultralytics and add local YOLO weights to enable replay event analysis."
     elif action_model_ready:
@@ -119,7 +154,8 @@ def status() -> dict[str, Any]:
             "action_model_id": "microsoft/xclip-base-patch32" if action_model_ready else None,
             "degraded": not detector_ready,
             "message": analysis_message,
-            "vlm_connected": False,
+            "vlm_connected": semantic_status["state"] in {"loading", "ready"},
+            "vlm": semantic_status,
         },
         "policy": "Visual evidence only; no access feed",
         "timezone": "Asia/Kolkata",
@@ -180,6 +216,7 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
         policy_version = "replay-policy-v1"
         policy = {"gate_line_y": request.gate_line_y, "zone": request.zone}
         classifier = get_action_classifier()
+        semantic_service = get_vlm_service()
         session_id = store.create_session(
             started, mode="replay", policy_version=policy_version, policy_json=policy
         )
@@ -194,6 +231,7 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
             store=store,
             media=MediaExporter(media_root),
             action_classifier=classifier,
+            semantic_submit=semantic_service.submit if semantic_service is not None else None,
         )
         on_frame, on_finish = orchestrator.process, orchestrator.finish
     else:

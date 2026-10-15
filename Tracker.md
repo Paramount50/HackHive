@@ -116,6 +116,15 @@ boundary, sustains a person-down rule for three sampled seconds, creates one
 needs-review incident, and retrieves its ready keyframe and event clip. The substitute
 detector proves application wiring only; it does not validate YOLO accuracy.
 
+VLM connection stage — 2026-10-16: P0 replay candidates can now submit four ordered
+frames to the pinned SmolVLM worker through the bounded single-worker scheduler without
+blocking replay. Category-specific evidence requirements produce `supported`,
+`insufficient_evidence`, `contradicted`, `category_conflict`, or `inconclusive`; every
+outcome stays `needs_review`. A separate SQLite connection records the model attempt,
+timing, provenance, raw structured output, and verdict on the existing incident.
+Verification: 70 passed, 4 GPU-dependent skipped. CPU tests use an injected worker;
+real replay-to-VLM execution and quality remain a GPU-owner validation gate.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections import deque
+from typing import Callable
 
 from .contracts import FixtureAnalysis, MediaStatus
 from .ingest.replay import FramePacket
+from .inference.service import SemanticJob
 from .media import MediaExporter
 from .perception.action import ActionClassification
 from .perception.pipeline import PerceptionPipeline
@@ -42,6 +44,7 @@ class EventOrchestrator:
         action_classifier: ActionClassifier | None = None,
         action_window_ms: int = 2_000,
         action_stride_ms: int = 1_000,
+        semantic_submit: Callable[[SemanticJob], bool] | None = None,
     ) -> None:
         self.session_id = session_id
         self.session_started_utc_ms = session_started_utc_ms
@@ -59,6 +62,8 @@ class EventOrchestrator:
         self.action_stride_ms = action_stride_ms
         self.last_action_pts_ms: int | None = None
         self.last_action_frame_indices: list[int] = []
+        self.semantic_submit = semantic_submit
+        self.semantic_submitted_events: set[str] = set()
 
     def process(self, packet: FramePacket) -> list[str]:
         if packet.session_id != self.session_id:
@@ -163,12 +168,41 @@ class EventOrchestrator:
                 ).fetchone()
                 if not has_keyframe:
                     self.store.add_media_artifact(event_id, self.media.export_keyframe(event_id, packet))
+                self._submit_semantic_verification(event_id, candidate, candidate_key)
 
         closed = self.store.close_inactive_events(
             packet.captured_utc_ms, self.merge_gap_ms, session_id=self.session_id
         )
         self._export_closed(closed)
         return touched
+
+    def _submit_semantic_verification(
+        self, event_id: str, candidate: Candidate, candidate_key: str
+    ) -> None:
+        if self.semantic_submit is None or event_id in self.semantic_submitted_events:
+            return
+        if str(candidate.category) not in {
+            "person_down", "crowd_gathering", "suspected_tailgating"
+        }:
+            return
+        available = [
+            frame for frame in self.frames
+            if max(0, candidate.start_pts_ms - 2_000) <= frame.source_pts_ms <= candidate.trigger_pts_ms
+        ]
+        if len(available) < 4:
+            return
+        indices = [round(index * (len(available) - 1) / 3) for index in range(4)]
+        selected = [available[index] for index in indices]
+        job = SemanticJob(
+            event_id=event_id,
+            camera_id=selected[-1].camera_id,
+            candidate_key=candidate_key,
+            expected_outcome=str(candidate.category),
+            image_paths=tuple(frame.asset_id for frame in selected),
+            source_pts_ms=tuple(frame.source_pts_ms for frame in selected),
+        )
+        if self.semantic_submit(job):
+            self.semantic_submitted_events.add(event_id)
 
     def _classify_window(self, packet: FramePacket) -> ActionClassification | None:
         if self.action_classifier is None:

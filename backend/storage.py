@@ -16,6 +16,8 @@ from .contracts import (
     ReviewStatus,
     utc_now_ms,
 )
+from .inference.contracts import VisualObservation, verification_verdict
+from .inference.service import SemanticJob
 
 
 SCHEMA = """
@@ -232,6 +234,78 @@ class Store:
         )
         self.connection.commit()
         return event_id
+
+    def record_vlm_result(self, job: SemanticJob, result: dict[str, Any]) -> str:
+        """Attach one model attempt to an existing candidate without auto-accepting it."""
+        event = self.connection.execute(
+            """SELECT e.*, s.started_utc_ms AS session_started_utc_ms
+               FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
+               WHERE e.event_id=?""",
+            (job.event_id,),
+        ).fetchone()
+        if event is None:
+            raise KeyError(job.event_id)
+        observation: VisualObservation | None = None
+        verdict = "inference_failed"
+        error_code = result.get("error_code")
+        if result.get("status") == "completed" and result.get("observation") is not None:
+            try:
+                observation = VisualObservation.model_validate(result["observation"])
+                verdict = verification_verdict(observation, job.expected_outcome)
+            except (TypeError, ValueError) as exc:
+                error_code = "invalid_model_output"
+                result = {**result, "error": str(exc)[:1000]}
+        window_id = str(uuid.uuid4())
+        start_utc_ms = event["session_started_utc_ms"] + job.source_pts_ms[0]
+        end_utc_ms = event["session_started_utc_ms"] + job.source_pts_ms[-1]
+        payload = {
+            "verdict": verdict,
+            "expected_outcome": job.expected_outcome,
+            "observation": observation.model_dump() if observation else None,
+            "raw_output": str(result.get("raw_output", ""))[:8_000],
+        }
+        status = "completed" if observation is not None else "failed"
+        with self.connection:
+            self.connection.execute(
+                """INSERT INTO analysis_windows
+                (window_id,session_id,start_utc_ms,end_utc_ms,frame_count,reason,status,model_outcome,
+                 model_id,model_revision,prompt_version,observations_json,timings_json,error_code)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    window_id, event["session_id"], start_utc_ms, end_utc_ms, 4,
+                    "vlm_verification", status,
+                    observation.outcome if observation else None,
+                    result.get("model_id"), result.get("model_revision"), result.get("prompt_version"),
+                    json.dumps(payload), json.dumps(result.get("timings_ms", {})), error_code,
+                ),
+            )
+            window_ids = json.loads(event["window_ids_json"])
+            window_ids.append(window_id)
+            limitations = json.loads(event["limitations_json"])
+            limitations.append(f"VLM verification verdict: {verdict}.")
+            updates: dict[str, Any] = {
+                "window_ids_json": json.dumps(window_ids),
+                "limitations_json": json.dumps(limitations[-8:]),
+                "updated_utc_ms": utc_now_ms(),
+                "decision_state": str(DecisionState.NEEDS_REVIEW),
+            }
+            if verdict == "supported" and observation is not None:
+                predicates = json.loads(event["predicates_json"])
+                predicates.extend({
+                    "name": item.predicate,
+                    "supported": item.supported,
+                    "evidence_window_ids": [window_id],
+                    "frame_indices": item.frame_indices,
+                    "source": "vlm_verification",
+                } for item in observation.observations)
+                updates["summary"] = observation.summary
+                updates["predicates_json"] = json.dumps(predicates)
+            assignments = ",".join(f"{column}=?" for column in updates)
+            self.connection.execute(
+                f"UPDATE events SET {assignments} WHERE event_id=?",
+                [*updates.values(), job.event_id],
+            )
+        return verdict
 
     def close_inactive_events(
         self, observed_utc_ms: int, merge_gap_ms: int = 5_000, session_id: str | None = None

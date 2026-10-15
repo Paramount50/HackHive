@@ -14,6 +14,11 @@ PREDICATES = {
     "suspected_tailgating": {"same_direction_passages", "temporal_proximity", "gate_visibility", "access_mismatch"},
     "none": set(), "unknown": set(),
 }
+REQUIRED_VISUAL_EVIDENCE = {
+    "person_down": {"visible_person", "prone_posture"},
+    "crowd_gathering": {"people_in_zone", "scene_visibility"},
+    "suspected_tailgating": {"same_direction_passages", "gate_visibility"},
+}
 
 
 class Observation(BaseModel):
@@ -58,6 +63,24 @@ def parse_observation(raw: str, frame_count: int) -> VisualObservation:
         if len(set(observation.frame_indices)) != len(observation.frame_indices):
             raise ValueError("duplicate frame reference")
     return value
+
+
+def verification_verdict(observation: VisualObservation, expected_outcome: str) -> str:
+    """Interpret a visual observation without converting it into incident truth."""
+    if expected_outcome not in REQUIRED_VISUAL_EVIDENCE:
+        raise ValueError("expected outcome is not supported by visual verification")
+    if observation.outcome == "unknown":
+        return "inconclusive"
+    if observation.outcome == "none":
+        return "contradicted"
+    if observation.outcome != expected_outcome:
+        return "category_conflict"
+    supported = {
+        item.predicate for item in observation.observations if item.supported is True
+    }
+    if not REQUIRED_VISUAL_EVIDENCE[expected_outcome].issubset(supported):
+        return "insufficient_evidence"
+    return "supported"
 
 
 def generation_schema() -> dict:

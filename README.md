@@ -6,7 +6,10 @@ The standalone worker is `backend/inference/smolvlm.py`. It serializes requests,
 loads only local safetensors/configuration, and returns observations rather than
 automatically accepting incidents. Replay frames can run through the local YOLO
 detector, temporal candidate rules, event storage, and evidence exporter. The VLM
-worker is still a separate smoke-test path and does not yet confirm application events.
+worker is connected as an optional candidate-verification path through one bounded
+background queue. When the pinned local model is installed, a new P0 candidate submits
+four chronological frames; its structured result is attached to that incident and
+remains review-only. Model absence or failure leaves the CPU candidate path available.
 The CPU rules detect candidate `person_down`, `crowd_gathering`, and
 `suspected_tailgating` events. An optional local XCLIP zero-shot action ranker adds
 reviewable `aggression_fight`, `person_down`, and `crowd_gathering` candidates.
@@ -43,7 +46,9 @@ must not auto-accept incidents. Inspect outcome counts and raw responses before 
 Each run creates a new `reports/vlm-<UTC timestamp>/` directory containing source
 hashes, hardware, exact model/prompt/runtime configuration, raw outputs and failures,
 per-request timings, peak PyTorch memory, and summary counts. Warm-up is separate.
-There is no hosted inference fallback, model-generated SQL, or automatic DB write.
+There is no hosted inference fallback or model-generated SQL. Replay verification
+writes the raw structured attempt, timing, model provenance, and deterministic evidence
+verdict to the existing incident; it never auto-confirms an event.
 Malformed JSON is a failed analysis, never a normal scene. No automatic retry is
 used in the smoke test, so first-attempt validity is visible.
 
@@ -63,10 +68,15 @@ See the official [model card](https://huggingface.co/HuggingFaceTB/SmolVLM2-500M
 and [processor documentation](https://huggingface.co/docs/transformers/v4.57.1/model_doc/smolvlm).
 
 Without detector weights, replay is deliberately reported as `decode_only`; it does
-not create incidents. Candidate events from YOLO/rules remain unreviewed and are not
-VLM-confirmed. Tailgating is disabled unless a gate line is supplied, and the default
+not create incidents. Candidate events from YOLO/rules remain unreviewed even after
+VLM verification. Tailgating is disabled unless a gate line is supplied, and the default
 crowd zone is the whole frame; configure geometry for each camera before interpreting
 those categories.
+
+Set `HACKHIVE_VLM_MODEL_DIR` if the pinned model is not stored at
+`models/smolvlm2-500m`. `GET /api/status` reports the VLM state,
+queue depth, failures, and model provenance. A `ready` worker means the runtime loaded;
+it is not an accuracy claim.
 
 ## Real video replay setup
 
