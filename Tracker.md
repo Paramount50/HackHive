@@ -33,7 +33,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | T09 | C | P0 | Dashboard, evidence drawer, visible failure states | T03,T08 | IN_PROGRESS | React dashboard includes fixture review plus real replay start/stop controls, live worker state, sampled-frame count, failure text, and latest-frame preview; event media walkthrough remains pending |
 | T10 | B | P0 | Query intent, list/count/group and citations | T03,T06 | IN_PROGRESS | Deterministic natural-language parsing maps category, camera, time and operation into closed `QueryIntent`; dashboard shows answers, applied filters, clarification and clickable event citations. Frozen retrieval evaluation remains |
 | T11 | B | P0 | Confirm/reject reviews, retention and recovery | T08 | TODO | Retry/restart/expiry test results |
-| T12 | A+C | P0 | Frozen B0/C1 comparison and error analysis | T02,T06,T08 | TODO | Configs, predictions, timing logs, raw metrics |
+| T12 | A+C | P0 | Frozen B0/C1 comparison and error analysis | T02,T06,T08 | IN_PROGRESS | Added deterministic one-to-one event scorer and CLI for raw TP/FP/FN, per-class precision/recall, false alerts/hour, and p50/p95 latency. Frozen labeled footage and real B0/C1 predictions remain |
 | T13 | All | P0 | Soak, offline rehearsal and demo backup | T09,T10,T11,T12 | TODO | 30-minute log, disconnected run, labeled recording |
 | T14 | All | P1 | Second camera, RTSP, zone editor, refinement | T13 | TODO | Admit only with spare time and repeated resource test |
 | T15 | A | P1 | Optional vLLM/speculative-decoding feasibility trial | T12 | TODO | Profile first; CUT if unsupported, no headroom or no end-to-end gain |

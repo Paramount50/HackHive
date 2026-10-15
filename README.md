@@ -49,3 +49,16 @@ Start the FastAPI service first. Open http://127.0.0.1:5173 to use the React
 dashboard. It currently displays fixture incidents and their evidence metadata;
 real frames, clips, capture, and inference are intentionally not represented
 as complete.
+
+## Evaluation
+
+Score a frozen JSON file containing `duration_ms`, `labels`, and `predictions`:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate.py evaluation\run.json --output evaluation\metrics.json
+```
+
+The scorer uses one-to-one same-source, same-category temporal matching and
+reports raw counts alongside precision, recall, false alerts per hour, and
+alert-latency percentiles. Commit the small manifests and metrics, not footage
+or model weights.
