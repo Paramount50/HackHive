@@ -1,5 +1,57 @@
 # HackHive local event desk
 
+## Local Qwen3 analyst chat and hybrid retrieval
+
+`POST /api/query` keeps validated `QueryIntent` filters and parameterized SQLite
+queries as the source of truth. Exact counts, grouping, categories, cameras, time
+ranges and review state are calculated by application code. Descriptive questions
+can additionally rank the filtered real events with CPU MiniLM embeddings; Qwen3-0.6B
+selects a validated retrieval mode and phrases a bounded answer from those records.
+Application code creates citations from retrieved event IDs, so model text cannot
+introduce a trusted event reference. Raw video and frames are never embedded.
+
+The selected local models are pinned to exact revisions:
+
+- `Qwen/Qwen3-0.6B` for non-thinking routing and grounded answer phrasing.
+- `sentence-transformers/all-MiniLM-L6-v2` for small CPU sentence embeddings using
+  the existing Transformers/PyTorch runtime directly.
+
+Download once while online, then run an explicit local smoke test:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-gpu.txt
+.\.venv\Scripts\python.exe scripts\setup_chat_models.py --download
+.\.venv\Scripts\python.exe scripts\setup_chat_models.py --smoke --device cpu
+```
+
+Weights and provenance are stored under the Git-ignored
+`models/qwen3-0.6b/` and `models/all-minilm-l6-v2/` directories. Chat defaults to
+CPU so it does not compete with SmolVLM/XCLIP for the laptop GPU. Set
+`HACKHIVE_CHAT_DEVICE=cuda` only for a measured isolated trial. Set
+`HACKHIVE_CHAT_ENABLED=0` to disable both local chat models; supported structured
+queries continue using the deterministic parser and SQLite. Override locations with
+`HACKHIVE_CHAT_MODEL_DIR` and `HACKHIVE_EMBEDDING_MODEL_DIR`.
+
+`GET /api/status` reports `not_configured`, `available`, `ready`, or `disabled`.
+`available` means the pinned provenance files exist; only `ready` means both adapters
+actually loaded. A load or malformed-routing failure falls back to deterministic
+behavior when the question has sufficient structured filters. No hosted inference,
+model-generated SQL, executable output, LangChain, or vector database is used.
+
+Run the reproducible query evaluation after replacing each `null`
+`expected_event_ids` entry with labels from the database snapshot being tested:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_chat.py evaluation\chat_questions.json `
+  --database data\hackhive.sqlite --with-models `
+  --output reports\chat-evaluation.json
+```
+
+The evaluator records routing, parsed filters, returned event IDs, citation validity,
+clarification behavior and latency. Unlabeled retrieval cases are excluded from its
+retrieval-accuracy count. Do not report chatbot accuracy until the event IDs are
+frozen and labeled for the chosen database snapshot.
+
 ## Person A: local GPU smoke test
 
 The standalone worker is `backend/inference/smolvlm.py`. It serializes requests,

@@ -141,6 +141,23 @@ active choice. Both paths retain the same four-frame generation budget and store
 selection provenance, enabling a controlled GPU comparison without code changes.
 Verification after adding the uniform baseline: 74 passed, 4 GPU-dependent skipped.
 
+Local query-model stage — 2026-10-16: the existing `/api/query` and Analyst Chat now
+support validated `structured`, `semantic`, and `hybrid` retrieval. Parameterized
+SQLite filtering runs before semantic ranking; counts and groups never come from the
+model. Pinned Qwen3-0.6B may route descriptive questions and phrase answers from a
+bounded event context, while pinned all-MiniLM-L6-v2 ranks event documents on CPU.
+Application code owns citations and resolves ranked IDs back through SQLite; deleted
+events and changed event text cannot silently survive the in-memory embedding cache.
+Model absence, malformed routing and load failure retain deterministic structured
+queries. The React chat exposes retrieval mode, source count, model, fallbacks and
+semantic score without changing evidence-drawer behavior. Added `backend/chat.py`,
+`scripts/setup_chat_models.py`, `scripts/evaluate_chat.py`, the frozen question-set
+template and deterministic fake-model tests. Current code validation passes without
+model downloads: 83 tests passed, four GPU-dependent tests skipped, the React
+production build passed, both scripts compiled, and a model-free evaluator dry run
+completed. Real Qwen/MiniLM smoke, latency and RAM remain unverified on this
+checkout and must not be reported as measured results.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.
@@ -170,7 +187,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | T07 | B | P0 | Passages and simulated grant reconciliation | T03,T05 | IN_PROGRESS | SQLite passage/grant operations use stable dedupe keys and transactional grant consumption; retry test passes, while normal unmatched/two-grant cases remain pending |
 | T08 | B | P0 | Event merging, keyframes, event/earlier-context clip export | T03,T04,T06 | IN_PROGRESS | Real keyframe/clip path exercised; repeated crowd candidates now share stable per-session zone identity and must be rerun; earlier context and VLM confirmation remain |
 | T09 | C | P0 | Dashboard, evidence drawer, visible failure states | T03,T08 | IN_PROGRESS | Replay mode and detector state are exposed; production build passes; real-event browser walkthrough remains |mains |
-| T10 | B | P0 | Query intent, list/count/group and citations | T03,T06 | IN_PROGRESS | Analyst chat now keeps conversation history, offers grounded quick prompts, maps natural language into six controlled categories, and returns clickable citations/clarification suggestions; query tests cover the expanded taxonomy. Frozen retrieval evaluation remains |
+| T10 | B | P0 | Query intent, list/count/group and citations | T03,T06 | IN_PROGRESS | Deterministic SQLite filters/counts, Qwen3-0.6B routing/answer adapter, CPU MiniLM hybrid ranking, real-event citations and frozen evaluation runner are implemented; pinned real-model smoke and labeled expected event IDs remain |
 | T11 | B | P0 | Confirm/reject reviews, retention and recovery | T08 | TODO | Retry/restart/expiry test results |
 | T12 | A+C | P0 | Frozen B0/C1 comparison and error analysis | T02,T06,T08 | IN_PROGRESS | Added deterministic one-to-one event scorer and CLI for raw TP/FP/FN, per-class precision/recall, false alerts/hour, and p50/p95 latency. Frozen labeled footage and real B0/C1 predictions remain |
 | T13 | All | P0 | Soak, offline rehearsal and demo backup | T09,T10,T11,T12 | TODO | 30-minute log, disconnected run, labeled recording |

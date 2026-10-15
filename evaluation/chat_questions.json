@@ -1,0 +1,45 @@
+[
+  {
+    "id": "structured-tailgating-today",
+    "question": "Show suspected tailgating today.",
+    "expected_mode": "structured",
+    "expected_filters": {"categories": ["suspected_tailgating"]},
+    "expected_event_ids": null
+  },
+  {
+    "id": "structured-crowd-count",
+    "question": "How many crowd gatherings were recorded?",
+    "expected_mode": "structured",
+    "expected_filters": {"operation": "count", "categories": ["crowd_gathering"]},
+    "expected_event_ids": null
+  },
+  {
+    "id": "semantic-lying-ground",
+    "question": "Did anyone appear to be lying on the ground?",
+    "expected_mode": "hybrid",
+    "expected_filters": {"categories": ["person_down"]},
+    "expected_event_ids": null
+  },
+  {
+    "id": "semantic-entrance",
+    "question": "Was anything concerning happening near the entrance?",
+    "expected_mode": "semantic",
+    "expected_filters": {},
+    "expected_event_ids": null
+  },
+  {
+    "id": "hybrid-camera-morning",
+    "question": "What unusual things happened on camera 1 this morning?",
+    "expected_mode": "hybrid",
+    "expected_filters": {"camera_ids": ["cam-1"]},
+    "expected_event_ids": null
+  },
+  {
+    "id": "unsupported-safety",
+    "question": "Was the building safe?",
+    "expected_mode": null,
+    "expected_filters": {},
+    "expected_event_ids": [],
+    "expect_clarification": true
+  }
+]

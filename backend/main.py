@@ -159,15 +159,21 @@ def status() -> dict[str, Any]:
         "model_revision": None,
         "selection_strategy": vlm_sampling_strategy,
     }
+    query_weights_available = (
+        (chat_model_dir / "hackhive-chat-model.json").is_file()
+        and (embedding_model_dir / "hackhive-embedding-model.json").is_file()
+    )
+    query_models_loaded = bool(
+        chat_model is not None and chat_model.model is not None
+        and semantic_ranker is not None and semantic_ranker.embedder.model is not None
+    )
     query_status = {
         "enabled": chat_enabled,
         "state": (
             "disabled" if not chat_enabled
-            else "ready" if chat_model is not None and semantic_ranker is not None
-            else "available" if (
-                (chat_model_dir / "hackhive-chat-model.json").is_file()
-                and (embedding_model_dir / "hackhive-embedding-model.json").is_file()
-            ) else "not_configured"
+            else "ready" if query_models_loaded
+            else "available" if query_weights_available
+            else "not_configured"
         ),
         "model_id": "Qwen/Qwen3-0.6B" if (chat_model_dir / "hackhive-chat-model.json").is_file() else None,
         "embedding_model_id": (
