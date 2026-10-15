@@ -44,6 +44,50 @@ def test_verification_requires_category_specific_supported_evidence() -> None:
     assert verification_verdict(normal, "person_down") == "contradicted"
 
 
+def test_verification_distinguishes_false_unknown_and_missing_required_evidence() -> None:
+    false_evidence = VisualObservation.model_validate({
+        "outcome": "person_down",
+        "summary": "A person is visible but not prone.",
+        "observations": [
+            {"predicate": "visible_person", "supported": True, "frame_indices": [0]},
+            {"predicate": "prone_posture", "supported": False, "frame_indices": [0, 1]},
+        ],
+        "limitations": [],
+    })
+    assert verification_verdict(false_evidence, "person_down") == "contradicted"
+
+    unknown_evidence = VisualObservation.model_validate({
+        "outcome": "person_down",
+        "summary": "The posture is unclear.",
+        "observations": [
+            {"predicate": "visible_person", "supported": True, "frame_indices": [0]},
+            {"predicate": "prone_posture", "supported": None, "frame_indices": [0, 1]},
+        ],
+        "limitations": [],
+    })
+    assert verification_verdict(unknown_evidence, "person_down") == "inconclusive"
+
+    missing_evidence = VisualObservation.model_validate({
+        "outcome": "person_down",
+        "summary": "A person is visible.",
+        "observations": [
+            {"predicate": "visible_person", "supported": True, "frame_indices": [0]},
+        ],
+        "limitations": [],
+    })
+    assert verification_verdict(missing_evidence, "person_down") == "insufficient_evidence"
+
+
+def test_person_down_with_empty_evidence_is_not_supported() -> None:
+    observation = VisualObservation.model_validate({
+        "outcome": "person_down",
+        "summary": "A person is standing near a checkout counter.",
+        "observations": [],
+        "limitations": ["The view does not show a prone posture."],
+    })
+    assert verification_verdict(observation, "person_down") == "insufficient_evidence"
+
+
 def test_semantic_service_runs_one_bounded_background_worker(tmp_path) -> None:
     paths = []
     for index in range(4):

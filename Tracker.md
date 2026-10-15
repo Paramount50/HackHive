@@ -167,6 +167,15 @@ observation objects, and now record JSON/validation stage plus EOS/capacity diag
 Verification: 84 tests passed, 5 GPU-dependent tests skipped. This is a structural
 reliability fix only; no accuracy claim or new visual categories was added.
 
+Kaggle audit follow-up: verification now distinguishes a required predicate explicitly
+reported false (`contradicted`), explicitly unknown (`inconclusive`), and omitted
+(`insufficient_evidence`). A schema-valid `person_down` response with false
+`persistence`/`visible_person` evidence or no observations therefore cannot be treated
+as semantically supported. Raw model output remains stored; the model output is not
+rewritten. The supplied fight clip remains out of scope for SmolVLM accuracy because
+`aggression_fight` is not in its current visual contract. The unverified gun statement
+remains an unconfirmed model claim because source frames were not supplied here.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

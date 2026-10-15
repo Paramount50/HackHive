@@ -88,10 +88,13 @@ def verification_verdict(observation: VisualObservation, expected_outcome: str) 
         return "contradicted"
     if observation.outcome != expected_outcome:
         return "category_conflict"
-    supported = {
-        item.predicate for item in observation.observations if item.supported is True
-    }
-    if not REQUIRED_VISUAL_EVIDENCE[expected_outcome].issubset(supported):
+    evidence = {item.predicate: item.supported for item in observation.observations}
+    required = REQUIRED_VISUAL_EVIDENCE[expected_outcome]
+    if any(predicate in evidence and evidence[predicate] is False for predicate in required):
+        return "contradicted"
+    if any(predicate in evidence and evidence[predicate] is None for predicate in required):
+        return "inconclusive"
+    if any(predicate not in evidence for predicate in required):
         return "insufficient_evidence"
     return "supported"
 
