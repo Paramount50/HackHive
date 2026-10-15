@@ -17,6 +17,7 @@ app = FastAPI(title="HackHive Local Event Desk", version="0.1.0")
 store = Store(Path("data") / "hackhive.sqlite")
 store.seed_camera()
 replay_manager = ReplayManager(Path("recordings"), Path("data") / "replay_frames")
+media_root = (Path("data") / "media").resolve()
 
 
 def public_replay_status(result: dict[str, Any]) -> dict[str, Any]:
@@ -149,6 +150,19 @@ def event(event_id: str) -> dict[str, Any]:
             ]
             return item
     raise HTTPException(status_code=404, detail="event not found")
+
+
+@app.get("/api/media/{media_id}")
+def media(media_id: str) -> FileResponse:
+    item = store.get_media(media_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="media not found")
+    if item["status"] != "ready":
+        raise HTTPException(status_code=409, detail=f"media is {item['status']}")
+    path = (media_root / item["relative_path"]).resolve()
+    if not path.is_relative_to(media_root) or not path.is_file():
+        raise HTTPException(status_code=404, detail="media file is unavailable")
+    return FileResponse(path, media_type=item["mime_type"])
 
 
 @app.post("/api/events/{event_id}/reviews")

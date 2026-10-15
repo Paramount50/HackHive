@@ -228,7 +228,7 @@ class Store:
                 )
         return [row["event_id"] for row in rows]
 
-    def add_media(self, event_id: str, status: MediaStatus = MediaStatus.READY) -> str:
+    def add_media(self, event_id: str, status: MediaStatus = MediaStatus.MISSING) -> str:
         media_id = str(uuid.uuid4())
         now = utc_now_ms()
         self.connection.execute(
@@ -240,6 +240,28 @@ class Store:
         )
         self.connection.commit()
         return media_id
+
+    def add_media_artifact(self, event_id: str, artifact: Any) -> str:
+        media_id = str(uuid.uuid4())
+        now = utc_now_ms()
+        self.connection.execute(
+            """INSERT INTO media
+            (media_id,event_id,kind,relative_path,mime_type,status,coverage_start_utc_ms,coverage_end_utc_ms,
+             requested_start_utc_ms,requested_end_utc_ms,byte_size,sha256,expires_utc_ms)
+            VALUES (?,?,?,?,?,'ready',?,?,?,?,?,?,?)""",
+            (
+                media_id, event_id, artifact.kind, artifact.relative_path, artifact.mime_type,
+                artifact.coverage_start_utc_ms, artifact.coverage_end_utc_ms,
+                artifact.requested_start_utc_ms, artifact.requested_end_utc_ms,
+                artifact.byte_size, artifact.sha256, now + 30 * 24 * 3600 * 1000,
+            ),
+        )
+        self.connection.commit()
+        return media_id
+
+    def get_media(self, media_id: str) -> dict[str, Any] | None:
+        row = self.connection.execute("SELECT * FROM media WHERE media_id=?", (media_id,)).fetchone()
+        return dict(row) if row else None
 
     def add_grant(
         self,
