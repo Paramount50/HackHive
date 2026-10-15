@@ -110,6 +110,12 @@ and camera filters plus review status and playable-evidence availability. SQLite
 applies review projection from the latest review and evidence existence before the
 result limit. The dashboard exposes multi-category, review, and evidence controls.
 
+End-to-end acceptance stage — 2026-10-16: a TestClient journey now uploads real AVI
+bytes, registers the recording, starts background replay, crosses an injected detector
+boundary, sustains a person-down rule for three sampled seconds, creates one
+needs-review incident, and retrieves its ready keyframe and event clip. The substitute
+detector proves application wiring only; it does not validate YOLO accuracy.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

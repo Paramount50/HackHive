@@ -411,3 +411,64 @@ def test_video_upload_rejects_unsupported_and_oversized_files(tmp_path, monkeypa
         )
         assert oversized.status_code == 413
     assert not list((tmp_path / "uploads").glob("*"))
+
+
+def test_upload_to_analysis_creates_incident_and_evidence(tmp_path, monkeypatch) -> None:
+    from backend import main
+    from backend.perception.pipeline import BoxDetection
+
+    source = tmp_path / "source.avi"
+    write_test_video(source, frame_count=30)
+    upload_root = tmp_path / "recordings"
+    weights = tmp_path / "fake-yolo.pt"
+    weights.write_bytes(b"test boundary only")
+
+    class FixedDetector:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def detect(self, image_path):
+            return [BoxDetection(5, 15, 55, 30, 0.9, "person")]
+
+    monkeypatch.setattr(main, "recordings_root", upload_root)
+    monkeypatch.setattr(main, "replay_manager", ReplayManager(upload_root, tmp_path / "frames"))
+    monkeypatch.setattr(main, "media_root", (tmp_path / "media").resolve())
+    monkeypatch.setattr(main, "detector_weights", weights)
+    monkeypatch.setattr(main, "YoloDetector", FixedDetector)
+    monkeypatch.setattr(main, "get_action_classifier", lambda: None)
+    monkeypatch.setattr(main.importlib.util, "find_spec", lambda name: object())
+
+    with TestClient(main.app) as client:
+        uploaded = client.post(
+            "/api/uploads",
+            files={"file": ("person-down.avi", source.read_bytes(), "video/x-msvideo")},
+        )
+        assert uploaded.status_code == 201
+        started = client.post(
+            "/api/replays",
+            json={
+                "source_name": uploaded.json()["source_name"],
+                "sample_fps": 1,
+                "pace": False,
+                "max_frames": 3,
+            },
+        )
+        assert started.status_code == 202
+        session_id = started.json()["session_id"]
+        deadline = monotonic() + 5
+        status = client.get(f"/api/replays/{session_id}").json()
+        while status["status"] not in {"completed", "failed"} and monotonic() < deadline:
+            sleep(0.01)
+            status = client.get(f"/api/replays/{session_id}").json()
+
+        assert status["status"] == "completed"
+        assert status["analysis"] == "active"
+        assert status["events_created"] == 1
+        timeline = client.get("/api/events", params={"category": "person_down"}).json()["events"]
+        event = next(item for item in timeline if item["session_id"] == session_id)
+        assert event["decision_state"] == "needs_review"
+        assert event["thumbnail_media_id"]
+        detail = client.get(f"/api/events/{event['event_id']}").json()
+        assert {item["kind"] for item in detail["media"] if item["status"] == "ready"} == {
+            "keyframe", "event_clip"
+        }
