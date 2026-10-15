@@ -129,6 +129,47 @@ def test_semantic_service_uses_worker_frame_selector(tmp_path) -> None:
         service.close()
 
 
+def test_semantic_service_can_force_uniform_baseline(tmp_path) -> None:
+    paths = []
+    for index in range(6):
+        path = tmp_path / f"uniform-{index}.jpg"
+        Image.new("RGB", (32, 24), (index * 30, 0, 0)).save(path)
+        paths.append(str(path))
+
+    class Worker:
+        def load(self):
+            return {"model_id": "fake-vlm", "revision": "test"}
+
+        def select_frames(self, images, target_frames=4):
+            raise AssertionError("uniform baseline must bypass Swift selection")
+
+        def analyze(self, images, pts_ms):
+            assert pts_ms == [0, 1_000, 1_500, 2_500]
+            return {"status": "completed", "observation": supported_observation()}
+
+    completed = Event()
+    results = []
+    service = SemanticInferenceService(
+        Worker(), lambda job, result: (results.append(result), completed.set()),
+        selection_strategy="uniform",
+    )
+    service.start()
+    try:
+        assert service.submit(SemanticJob(
+            event_id="uniform-event",
+            camera_id="cam-1",
+            candidate_key="uniform-candidate",
+            expected_outcome="person_down",
+            image_paths=tuple(paths),
+            source_pts_ms=(0, 500, 1_000, 1_500, 2_000, 2_500),
+        ))
+        assert completed.wait(2)
+        assert results[0]["selection"]["strategy"] == "uniform_requested"
+        assert service.snapshot()["selection_strategy"] == "uniform"
+    finally:
+        service.close()
+
+
 def test_store_attaches_supported_vlm_result_without_auto_accepting() -> None:
     store = Store()
     session = store.create_session(10_000)

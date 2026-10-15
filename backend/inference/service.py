@@ -40,13 +40,17 @@ class SemanticInferenceService:
         *,
         max_pending: int = 3,
         deadline_seconds: float = 20.0,
+        selection_strategy: str = "swift",
     ) -> None:
         if deadline_seconds <= 0:
             raise ValueError("deadline_seconds must be positive")
+        if selection_strategy not in {"swift", "uniform"}:
+            raise ValueError("selection_strategy must be swift or uniform")
         self.worker = worker
         self.on_result = on_result
         self.scheduler = BoundedScheduler(max_pending=max_pending)
         self.deadline_seconds = deadline_seconds
+        self.selection_strategy = selection_strategy
         self._jobs: dict[str, SemanticJob] = {}
         self._jobs_lock = Lock()
         self._wake = Event()
@@ -97,6 +101,7 @@ class SemanticInferenceService:
             "counters": dict(self.scheduler.counters),
             "model_id": self.metadata.get("model_id"),
             "model_revision": self.metadata.get("revision"),
+            "selection_strategy": self.selection_strategy,
         }
 
     def close(self, timeout: float = 2.0) -> None:
@@ -136,7 +141,7 @@ class SemanticInferenceService:
             if len(images) == 4:
                 selected_indices = list(range(4))
                 strategy = "all"
-            elif hasattr(self.worker, "select_frames"):
+            elif self.selection_strategy == "swift" and hasattr(self.worker, "select_frames"):
                 gaps = [right - left for left, right in zip(job.source_pts_ms, job.source_pts_ms[1:])]
                 mean_gap = sum(gaps) / len(gaps)
                 regular = all(abs(gap - mean_gap) <= max(1, mean_gap * 0.25) for gap in gaps)
@@ -158,7 +163,7 @@ class SemanticInferenceService:
                     strategy = "swift_latent_taylor_v1"
             else:
                 selected_indices = [round(index * (len(images) - 1) / 3) for index in range(4)]
-                strategy = "uniform_fallback"
+                strategy = "uniform_requested"
             selected_images = [images[index] for index in selected_indices]
             selected_pts = [job.source_pts_ms[index] for index in selected_indices]
             selection_ms = (perf_counter() - selection_started) * 1000

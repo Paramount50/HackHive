@@ -135,6 +135,12 @@ cover selected-frame handoff. Verification: 73 passed, 4 GPU-dependent skipped.
 This `16 → 4` short-window adaptation has not been run on the GPU or shown to improve
 event recall; the paper evaluates longer pools and different VLM backbones.
 
+Sampler-ablation stage — 2026-10-16: `HACKHIVE_VLM_SAMPLING=swift|uniform`
+selects the candidate-frame policy at service startup, and `/api/status` reports the
+active choice. Both paths retain the same four-frame generation budget and store their
+selection provenance, enabling a controlled GPU comparison without code changes.
+Verification after adding the uniform baseline: 74 passed, 4 GPU-dependent skipped.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

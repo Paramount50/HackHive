@@ -68,6 +68,8 @@ long-video benchmarks and different VLMs; GPU compatibility and event recall rem
 unverified here. Exactly four available frames are all retained.
 Irregular timestamps, incompatible vision internals, or invalid selector output trigger
 a recorded uniform fallback instead of failing the incident-verification request.
+`HACKHIVE_VLM_SAMPLING` defaults to `swift`; set it to `uniform` before starting the
+service to run the same four-frame-budget baseline for an ablation.
 
 Admission requires at least 3 GiB free system RAM and 1800 MiB GPU budget, with the
 budget capped at 4 GiB and a 1 GiB free-VRAM reserve. This is a conservative startup

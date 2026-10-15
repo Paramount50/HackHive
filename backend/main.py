@@ -36,6 +36,9 @@ action_model_dir = Path(os.environ.get("HACKHIVE_ACTION_MODEL_DIR", "models/xcli
 action_classifier: XClipActionClassifier | None = None
 action_classifier_lock = Lock()
 vlm_model_dir = Path(os.environ.get("HACKHIVE_VLM_MODEL_DIR", "models/smolvlm2-500m")).resolve()
+vlm_sampling_strategy = os.environ.get("HACKHIVE_VLM_SAMPLING", "swift").strip().lower()
+if vlm_sampling_strategy not in {"swift", "uniform"}:
+    raise ValueError("HACKHIVE_VLM_SAMPLING must be swift or uniform")
 vlm_service: SemanticInferenceService | None = None
 vlm_service_lock = Lock()
 
@@ -71,7 +74,8 @@ def get_vlm_service() -> SemanticInferenceService | None:
     with vlm_service_lock:
         if vlm_service is None:
             vlm_service = SemanticInferenceService(
-                SmolVLMWorker(vlm_model_dir), _persist_vlm_result, max_pending=3
+                SmolVLMWorker(vlm_model_dir), _persist_vlm_result, max_pending=3,
+                selection_strategy=vlm_sampling_strategy,
             )
             vlm_service.start()
         return vlm_service
@@ -128,6 +132,7 @@ def status() -> dict[str, Any]:
         "counters": {},
         "model_id": None,
         "model_revision": None,
+        "selection_strategy": vlm_sampling_strategy,
     }
     if not detector_ready:
         analysis_message = "Install ultralytics and add local YOLO weights to enable replay event analysis."
