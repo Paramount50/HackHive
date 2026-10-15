@@ -32,4 +32,8 @@ dt { color: #8da1bb; font-size: 12px; margin-top: 10px; } dd { margin: 2px 0 0; 
 .replay-progress > div { display: grid; align-content: start; gap: 8px; } .replay-progress img { width: 100%; border-radius: 8px; border: 1px solid #45617d; }
 .job-state { width: fit-content; border-radius: 999px; padding: 4px 8px; background: #1e3a5f; color: #bfdbfe; font-size: 12px; text-transform: uppercase; }
 .job-state.failed, .error-text { color: #fecaca; } .job-state.completed { color: #86efac; background: #14532d; }
+.query-panel { margin-top: 16px; } .query-panel form { display: flex; gap: 8px; margin-top: 14px; }
+.query-panel form input { flex: 1; } .query-answer { display: grid; gap: 10px; border-top: 1px solid #263650; margin-top: 16px; padding-top: 16px; }
+.query-answer.clarification { color: #fbbf24; } button.query-result { display: grid; gap: 4px; width: 100%; text-align: left; background: #172943; color: #f1f5f9; border-color: #45617d; }
+.query-result small { color: #b8c5d6; } .query-result code { color: #8da1bb; font-size: 11px; }
 @media (max-width: 850px) { main { padding: 20px; } .workspace { grid-template-columns: 1fr; } }

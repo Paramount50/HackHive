@@ -73,6 +73,43 @@ function ReplayControl({ job, onJob, onError }) {
   );
 }
 
+function QueryPanel({ onSelect, onError }) {
+  const [question, setQuestion] = useState("Show all tailgating events from camera 1 today");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  async function ask(event) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      setResult(await request("/api/query", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question, timezone: "Asia/Kolkata" })
+      }));
+      onError("");
+    } catch (exception) { onError(exception.message); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <section className="query-panel panel">
+      <div><span className="eyebrow">INCIDENT QUERY</span><h2>Ask recorded history</h2></div>
+      <form onSubmit={ask}>
+        <input aria-label="Incident question" value={question} onChange={(event) => setQuestion(event.target.value)} />
+        <button disabled={loading}>{loading ? "Searching…" : "Ask"}</button>
+      </form>
+      {result && <div className={result.needs_clarification ? "query-answer clarification" : "query-answer"}>
+        <strong>{typeof result.answer === "string" ? result.answer : JSON.stringify(result.answer)}</strong>
+        {result.filters && <span className="metadata">Applied filters: {JSON.stringify(result.filters)}</span>}
+        {result.events?.map((event) => <button className="query-result" key={event.event_id} onClick={() => onSelect(event)}>
+          <span>{labels[event.category] ?? event.category}</span><small>{event.summary}</small><code>{event.event_id}</code>
+        </button>)}
+      </div>}
+    </section>
+  );
+}
+
 function EventCard({ event, selected, onSelect, onReview }) {
   const score = Math.round(event.confidence_score * 4);
   return (
@@ -162,6 +199,7 @@ function App() {
       <StatusBar status={status} />
       <div className="policy panel"><strong>Fixture mode</strong><span>Simulated access grants</span><span>Timezone: Asia/Kolkata</span><span className="warning">Not real inference</span></div>
       <ReplayControl job={replayJob} onJob={setReplayJob} onError={setError} />
+      <QueryPanel onSelect={setSelected} onError={setError} />
       {error && <div className="error panel">{error}</div>}
       <section className="workspace">
         <div className="feed panel">
