@@ -87,9 +87,9 @@ function App() {
     loadEvents();
   }, [category]);
 
-  async function runFixture() {
+  async function runFixture(path = "/api/fixtures/run") {
     try {
-      const result = await request("/api/fixtures/run", { method: "POST" });
+      const result = await request(path, { method: "POST" });
       setMessage(result.message);
       await loadEvents();
     } catch (exception) { setError(exception.message); }
@@ -109,7 +109,7 @@ function App() {
 
   return (
     <main>
-      <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div><button onClick={runFixture}>Run deterministic fixture</button></header>
+      <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div><div className="header-actions"><button onClick={() => runFixture()}>Run analysis fixture</button><button onClick={() => runFixture("/api/fixtures/perception-run")}>Run perception fixture</button></div></header>
       <StatusBar status={status} />
       <div className="policy panel"><strong>Fixture mode</strong><span>Simulated access grants</span><span>Timezone: Asia/Kolkata</span><span className="warning">Not real inference</span></div>
       {error && <div className="error panel">{error}</div>}

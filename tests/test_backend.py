@@ -77,6 +77,17 @@ def test_api_fixture_and_citations() -> None:
         assert query.json()["citations"]
 
 
+def test_perception_fixture_runs_rules_before_storage() -> None:
+    from backend.main import app
+
+    with TestClient(app) as client:
+        response = client.post("/api/fixtures/perception-run")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["candidate"]
+        assert body["event_id"]
+
+
 def test_replay_preserves_order_and_bounds_context() -> None:
     packets = [
         FramePacket("cam-1", "s", index, index * 1000, 1000 + index, 640, 360, f"fixture://{index}")

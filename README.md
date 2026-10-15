@@ -17,7 +17,9 @@ query, and review the event. Runtime SQLite data is written under `data/` and
 must not be committed.
 
 The API includes `/api/status`, `/api/events`, `/api/events/{id}`,
-`/api/events/{id}/reviews`, `/api/query`, and `/api/fixtures/run`.
+`/api/events/{id}/reviews`, `/api/query`, `/api/fixtures/run`, and
+`/api/fixtures/perception-run`. The perception fixture passes deterministic
+CPU detections through temporal candidate rules before storing an event.
 
 ## React dashboard
 
