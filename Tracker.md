@@ -158,6 +158,15 @@ production build passed, both scripts compiled, and a model-free evaluator dry r
 completed. Real Qwen/MiniLM smoke, latency and RAM remain unverified on this
 checkout and must not be reported as measured results.
 
+SmolVLM smoke audit: local report artifacts showed 4/6 responses failing after successful
+generation because duplicate `visible_person` predicates were emitted; two outputs passed
+validation but were semantically incorrect for the unlabelled footage. Outputs were below
+the 256-token cap (207-213 tokens in the reproduced failures), so truncation is not
+supported by this evidence. Updated the prompt/schema to request and constrain distinct
+observation objects, and now record JSON/validation stage plus EOS/capacity diagnostics.
+Verification: 84 tests passed, 5 GPU-dependent tests skipped. This is a structural
+reliability fix only; no accuracy claim or new visual categories was added.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

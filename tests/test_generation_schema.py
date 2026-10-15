@@ -35,3 +35,12 @@ def test_unknown_cannot_generate_fabricated_predicates():
 def test_category_must_be_chosen_before_its_predicates():
     assert not accepts(json.dumps({"summary": "A person.", "outcome": "person_down",
                                    "observations": [], "limitations": []}))
+
+
+def test_generation_schema_rejects_exact_duplicate_observation_objects():
+    duplicate = json.dumps({"outcome": "person_down", "summary": "A person.",
+                            "observations": [
+                                {"predicate": "visible_person", "supported": True, "frame_indices": [0]},
+                                {"predicate": "visible_person", "supported": True, "frame_indices": [0]},
+                            ], "limitations": []})
+    assert not accepts(duplicate)

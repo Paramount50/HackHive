@@ -7,13 +7,13 @@ from pathlib import Path
 from threading import Lock
 from time import perf_counter
 
-from .contracts import PREDICATES, generation_schema, parse_observation
+from .contracts import ObservationValidationError, PREDICATES, generation_schema, parse_observation
 from .hardware import gpu_budget_mib, hardware_report
 from .swift_sampling import select_temporal_surprises
 
 MODEL_ID = "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"
 MODEL_REVISION = "7b375e1b73b11138ff12fe22c8f2822d8fe03467"
-PROMPT_VERSION = "visual-p0-v5"
+PROMPT_VERSION = "visual-p0-v6"
 PROMPT = (
     "What visibly happens across these four ordered camera frames? "
     "Choose person_down for a person remaining prone; crowd_gathering for people remaining together; "
@@ -21,7 +21,7 @@ PROMPT = (
     "unknown if the view is insufficient to decide. "
     "Write a short factual summary of this particular scene, and limitations. "
     "For an incident, give at most two observations with predicate, supported (true/false/null), "
-    "and frame_indices (0 to 3). Predicates: " + json.dumps({
+    "and frame_indices (0 to 3); every predicate must be distinct. Predicates: " + json.dumps({
         k: sorted(v - {"access_mismatch"}) for k, v in PREDICATES.items() if v}) + ". "
     "For none or unknown omit observations. Return JSON only. "
     "Do not diagnose injury or infer authorization. Policy thresholds and grants are checked separately. "
@@ -195,11 +195,18 @@ class SmolVLMWorker:
                 raw = self.processor.decode(tokens, skip_special_tokens=True).strip()
                 result["raw_output"] = raw
                 result["output_tokens"] = len(tokens)
+                result["hit_max_new_tokens"] = len(tokens) >= self.max_new_tokens
+                eos_token_id = getattr(self.processor.tokenizer, "eos_token_id", None)
+                result["eos_reached"] = eos_token_id is not None and eos_token_id in tokens.tolist()
                 result["timings_ms"].update(preprocess=(prepared-started)*1000, inference=(generated-prepared)*1000)
                 try:
                     result["observation"] = parse_observation(raw, 4).model_dump()
+                except ObservationValidationError as exc:
+                    result.update(error_code="invalid_model_output", error=str(exc)[:1000],
+                                  validation_stage=exc.stage, validation_error=str(exc)[:1000])
                 except ValueError as exc:
-                    result.update(error_code="invalid_model_output", error=str(exc)[:1000])
+                    result.update(error_code="invalid_model_output", error=str(exc)[:1000],
+                                  validation_stage="validation", validation_error=str(exc)[:1000])
                 else:
                     result["status"] = "completed"
                 result["timings_ms"]["validation"] = (perf_counter()-generated)*1000

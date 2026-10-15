@@ -32,6 +32,14 @@ class InferenceContractTests(unittest.TestCase):
             with self.subTest(raw=raw), self.assertRaises(ValueError):
                 parse_observation(raw, 4)
 
+    def test_duplicate_predicates_remain_invalid(self):
+        duplicate = payload(observations=[
+            {"predicate": "visible_person", "supported": True, "frame_indices": [0]},
+            {"predicate": "visible_person", "supported": True, "frame_indices": [1]},
+        ])
+        with self.assertRaises(ValueError):
+            parse_observation(duplicate, 4)
+
     def test_budget_reserves_memory_and_never_goes_negative(self):
         self.assertEqual(gpu_budget_mib(3600), 2576)
         self.assertEqual(gpu_budget_mib(8000), 4096)

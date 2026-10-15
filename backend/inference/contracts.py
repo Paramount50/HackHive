@@ -50,18 +50,31 @@ class VisualObservation(BaseModel):
         return self
 
 
+class ObservationValidationError(ValueError):
+    def __init__(self, stage: str, message: str) -> None:
+        super().__init__(message)
+        self.stage = stage
+
+
 def parse_observation(raw: str, frame_count: int) -> VisualObservation:
     """Accept only a whole JSON object; never repair failures into normal scenes."""
     if not 1 <= frame_count <= 4:
         raise ValueError("expected one to four frames")
     if len(raw) > 8_000:
         raise ValueError("model response is too long")
-    value = VisualObservation.model_validate(json.loads(raw))
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ObservationValidationError("json_parse", str(exc)) from exc
+    try:
+        value = VisualObservation.model_validate(parsed)
+    except ValueError as exc:
+        raise ObservationValidationError("schema_or_semantic_validation", str(exc)) from exc
     for observation in value.observations:
         if any(index < 0 or index >= frame_count for index in observation.frame_indices):
-            raise ValueError("evidence references a frame outside this request")
+            raise ObservationValidationError("frame_validation", "evidence references a frame outside this request")
         if len(set(observation.frame_indices)) != len(observation.frame_indices):
-            raise ValueError("duplicate frame reference")
+            raise ObservationValidationError("frame_validation", "duplicate frame reference")
     return value
 
 
@@ -99,7 +112,8 @@ def generation_schema() -> dict:
         observation["properties"]["frame_indices"]["items"] = {
             "type": "integer", "minimum": 0, "maximum": 3}
         schema["properties"]["observations"] = {
-            "type": "array", "maxItems": 2 if allowed else 0, "items": observation}
+            "type": "array", "maxItems": 2 if allowed else 0,
+            "uniqueItems": True, "items": observation}
         if allowed:
             schema["required"] = ["outcome", "summary", "observations", "limitations"]
         else:
