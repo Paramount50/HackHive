@@ -36,6 +36,18 @@ CREATE TABLE IF NOT EXISTS analysis_windows (
  reason TEXT NOT NULL, status TEXT NOT NULL, model_outcome TEXT, model_id TEXT,
  model_revision TEXT, prompt_version TEXT, observations_json TEXT, timings_json TEXT, error_code TEXT
 );
+CREATE TABLE IF NOT EXISTS access_grants (
+ grant_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES stream_sessions(session_id),
+ gate_id TEXT NOT NULL, valid_from_utc_ms INTEGER NOT NULL, valid_until_utc_ms INTEGER NOT NULL,
+ allowed_passages INTEGER NOT NULL, consumed_passages INTEGER NOT NULL DEFAULT 0,
+ evidence_source TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS passages (
+ passage_id TEXT PRIMARY KEY, dedupe_key TEXT NOT NULL UNIQUE,
+ session_id TEXT NOT NULL REFERENCES stream_sessions(session_id), gate_id TEXT NOT NULL,
+ track_id TEXT NOT NULL, crossing_utc_ms INTEGER NOT NULL, crossing_pts_ms INTEGER NOT NULL,
+ direction TEXT NOT NULL, grant_id TEXT REFERENCES access_grants(grant_id)
+);
 CREATE TABLE IF NOT EXISTS events (
  event_id TEXT PRIMARY KEY, candidate_key TEXT NOT NULL UNIQUE,
  session_id TEXT NOT NULL REFERENCES stream_sessions(session_id), category TEXT NOT NULL,
@@ -191,6 +203,65 @@ class Store:
         )
         self.connection.commit()
         return media_id
+
+    def add_grant(
+        self,
+        session_id: str,
+        grant_id: str,
+        gate_id: str,
+        valid_from_utc_ms: int,
+        valid_until_utc_ms: int,
+        allowed_passages: int = 1,
+    ) -> None:
+        if valid_until_utc_ms <= valid_from_utc_ms or allowed_passages < 1:
+            raise ValueError("invalid grant window")
+        self.connection.execute(
+            """INSERT INTO access_grants
+            (grant_id,session_id,gate_id,valid_from_utc_ms,valid_until_utc_ms,allowed_passages,evidence_source)
+            VALUES (?,?,?,?,?,?,?)""",
+            (grant_id, session_id, gate_id, valid_from_utc_ms, valid_until_utc_ms, allowed_passages, "simulated"),
+        )
+        self.connection.commit()
+
+    def record_passage(
+        self,
+        session_id: str,
+        gate_id: str,
+        track_id: str,
+        crossing_utc_ms: int,
+        crossing_pts_ms: int,
+        direction: str = "entry",
+        dedupe_key: str | None = None,
+    ) -> dict[str, Any]:
+        if direction not in {"entry", "exit"}:
+            raise ValueError("direction must be entry or exit")
+        key = dedupe_key or f"{session_id}:{gate_id}:{track_id}:{crossing_pts_ms}:{direction}"
+        existing = self.connection.execute(
+            "SELECT * FROM passages WHERE dedupe_key=?", (key,)
+        ).fetchone()
+        if existing:
+            return dict(existing)
+        passage_id = str(uuid.uuid4())
+        grant = self.connection.execute(
+            """SELECT * FROM access_grants
+            WHERE session_id=? AND gate_id=? AND valid_from_utc_ms<=? AND valid_until_utc_ms>?
+            AND consumed_passages < allowed_passages ORDER BY valid_from_utc_ms LIMIT 1""",
+            (session_id, gate_id, crossing_utc_ms, crossing_utc_ms),
+        ).fetchone()
+        with self.connection:
+            self.connection.execute(
+                """INSERT INTO passages
+                (passage_id,dedupe_key,session_id,gate_id,track_id,crossing_utc_ms,crossing_pts_ms,direction,grant_id)
+                VALUES (?,?,?,?,?,?,?,?,?)""",
+                (passage_id, key, session_id, gate_id, track_id, crossing_utc_ms, crossing_pts_ms, direction,
+                 grant["grant_id"] if grant else None),
+            )
+            if grant:
+                self.connection.execute(
+                    "UPDATE access_grants SET consumed_passages=consumed_passages+1 WHERE grant_id=?",
+                    (grant["grant_id"],),
+                )
+        return dict(self.connection.execute("SELECT * FROM passages WHERE passage_id=?", (passage_id,)).fetchone())
 
     def _review_projection(self, event_id: str) -> tuple[ReviewStatus, list[dict[str, Any]]]:
         rows = self.connection.execute(

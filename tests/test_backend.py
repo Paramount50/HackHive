@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from backend.contracts import FixtureAnalysis, QueryIntent, ReviewRequest
 from backend.storage import Store
+from backend.ingest.replay import BoundedFrameBuffer, FixtureReplay, FramePacket
 
 
 def make_store() -> Store:
@@ -74,3 +75,27 @@ def test_api_fixture_and_citations() -> None:
         query = client.post("/api/query", json={"operation": "list"})
         assert query.status_code == 200
         assert query.json()["citations"]
+
+
+def test_replay_preserves_order_and_bounds_context() -> None:
+    packets = [
+        FramePacket("cam-1", "s", index, index * 1000, 1000 + index, 640, 360, f"fixture://{index}")
+        for index in range(4)
+    ]
+    buffer = BoundedFrameBuffer(max_frames=2)
+    for packet in FixtureReplay(packets).frames():
+        buffer.append(packet)
+    assert len(buffer) == 2
+    assert buffer.latest.frame_id == 3
+    assert [item.frame_id for item in buffer.between(2_000, 3_000)] == [2, 3]
+
+
+def test_grant_consumption_is_retry_safe() -> None:
+    store = make_store()
+    session = store.create_session(1_000)
+    store.add_grant(session, "grant-1", "door", 1_000, 10_000)
+    first = store.record_passage(session, "door", "track-1", 2_000, 1_000, dedupe_key="passage-1")
+    retry = store.record_passage(session, "door", "track-1", 2_000, 1_000, dedupe_key="passage-1")
+    assert first["passage_id"] == retry["passage_id"]
+    grant = store.connection.execute("SELECT consumed_passages FROM access_grants").fetchone()
+    assert grant["consumed_passages"] == 1

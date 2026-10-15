@@ -25,7 +25,8 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | T01 | A | P0 | Hardware budget and local four-frame smoke test | — | TODO | Environment/config, 20-request log, peak memory |
 | T02 | C | P0 | Safe fixtures, labels, split manifest | — | TODO | Source hashes, labels, non-overlapping source groups |
 | T03 | B | P0 | SQLite/API skeleton and validated contracts | — | DONE | `backend/storage.py`, `backend/contracts.py`, `backend/main.py`; `pytest -q` passes 5 tests covering unknown outcomes, merge deduplication, idempotent review, time filtering, fixture API and citations |
-| T04 | B | P0 | Paced replay/webcam, timestamps, ring buffer | T03 | TODO | Capture/PTS test, sample clip |
+| T04 | B | P0 | Paced replay/webcam, timestamps, ring buffer | T03 | IN_PROGRESS | `backend/ingest/replay.py` adds ordered fixture packets, a latest-frame slot and bounded context ring; replay tests pending |
+| T07 | B | P0 | Passages and simulated grant reconciliation | T03,T05 | IN_PROGRESS | SQLite passage/grant operations are implemented with stable dedupe keys and transactional consumption; focused retry tests pending |
 | T05 | A | P0 | CPU detection/tracking and temporal candidates | T04 | TODO | Three candidate fixtures plus hard negatives |
 | T06 | A | P0 | VLM worker, bounded scheduler and audits | T01,T05 | TODO | Real output, timeout/overload behavior, missed-audit log |
 | T07 | B | P0 | Passages and simulated grant reconciliation | T03,T05 | TODO | Retry and normal-crossing tests |
