@@ -30,6 +30,13 @@ hidden behind the first pair in history. All 46 tests pass, including four added
 regressions. This checks deterministic behavior, not detector accuracy; tracking
 fragmentation, ByteTrack integration, and policy-specific tuning remain unvalidated.
 
+Stage 4: scheduler now coalesces candidate/audit updates, limits each camera to two
+pending candidates, prioritizes urgent candidates/aged audits, serves a waiting audit
+after four candidates, and counts expired/overloaded work by reason. Queue mutation
+and worker execution are separately serialized; explicit handler failures are preserved.
+All 50 tests pass. Counters are process-local; B still needs durable coverage logging,
+and the application still needs the periodic audit producer and model-worker wiring.
+
 Updated: 2026-10-15. This tracker records evidence, not intentions. The first CPU-only backend slice is implemented; real model and performance work remain unrun.
 
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
