@@ -1,5 +1,19 @@
 # Build tracker
 
+## Person A staged work — 2026-10-15
+
+Stage 1: added `backend/inference/contracts.py`, `hardware.py` and contract tests.
+Validation rejects malformed JSON, unsupported P0 outcomes, invalid frame references,
+non-boolean evidence and visual claims of access authorization. Unknown remains distinct
+from normal. Three unittest cases (including seven invalid-output subcases) pass using
+the bundled Python 3.12 runtime. No model execution is claimed by these tests.
+
+Hardware at 17:05 UTC: RTX 3060 Laptop, 6144 MiB dedicated memory, 4838 MiB free,
+driver 591.74. Provisional budget after 1024 MiB reserve: 3814 MiB. Available system
+RAM: 6331/16236 MiB after the user closed applications. These are snapshots, not
+minimum-free-memory measurements over a soak. Six user-provided AVI files exist in
+the sibling `sample_videos` directory; labels and footage provenance remain unverified.
+
 Updated: 2026-10-15. This tracker records evidence, not intentions. The first CPU-only backend slice is implemented; real model and performance work remain unrun.
 
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
