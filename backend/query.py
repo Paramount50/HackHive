@@ -11,9 +11,19 @@ class QueryClarification(ValueError):
 
 
 CATEGORY_TERMS: dict[Category, tuple[str, ...]] = {
-    Category.PERSON_DOWN: ("person down", "fallen person", "lying on the floor", "prone person"),
-    Category.CROWD_GATHERING: ("crowd", "gathering", "too many people"),
-    Category.SUSPECTED_TAILGATING: ("tailgating", "tailgate", "close-following entry"),
+    Category.PERSON_DOWN: (
+        "person down", "fallen person", "someone fell", "person fell",
+        "lying on the floor", "on the ground", "prone person", "person lying",
+    ),
+    Category.CROWD_GATHERING: (
+        "crowd", "gathering", "people gathering", "group of people",
+        "too many people", "large group",
+    ),
+    Category.SUSPECTED_TAILGATING: (
+        "tailgating", "tailgate", "close-following entry",
+        "followed through the door", "multiple people entered after one",
+        "unauthorised access", "unauthorized access",
+    ),
 }
 
 
@@ -61,7 +71,7 @@ def parse_natural_query(request: NaturalQueryRequest) -> QueryIntent:
         operation, group_by = "group", "camera"
     elif re.search(r"\b(by|per)\s+categor(?:y|ies)\b", text):
         operation, group_by = "group", "category"
-    elif re.search(r"\b(show|list|find|which|what|events?|incidents?)\b", text):
+    elif re.search(r"\b(show|list|find|which|what|any|are there|did|events?|incidents?)\b", text):
         operation, group_by = "list", None
     else:
         raise QueryClarification("Ask to show, list, count, or group recorded incidents.")

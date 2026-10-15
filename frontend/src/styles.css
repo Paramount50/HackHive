@@ -37,4 +37,9 @@ dt { color: #8da1bb; font-size: 12px; margin-top: 10px; } dd { margin: 2px 0 0; 
 .query-panel form input { flex: 1; } .query-answer { display: grid; gap: 10px; border-top: 1px solid #263650; margin-top: 16px; padding-top: 16px; }
 .query-answer.clarification { color: #fbbf24; } button.query-result { display: grid; gap: 4px; width: 100%; text-align: left; background: #172943; color: #f1f5f9; border-color: #45617d; }
 .query-result small { color: #b8c5d6; } .query-result code { color: #8da1bb; font-size: 11px; }
+.suggestions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+button.suggestion { min-height: 32px; background: #172943; color: #bfdbfe; border-color: #45617d; font-size: 13px; font-weight: 500; }
+.chat-history { display: grid; gap: 12px; margin-top: 14px; max-height: 420px; overflow: auto; }
+.chat-turn { border-top: 1px solid #263650; padding-top: 12px; }
+.chat-question { color: #f1f5f9; } .chat-role { color: #60a5fa; font-size: 11px; font-weight: 800; margin-right: 8px; letter-spacing: .08em; }
 @media (max-width: 850px) { main { padding: 20px; } .workspace { grid-template-columns: 1fr; } }

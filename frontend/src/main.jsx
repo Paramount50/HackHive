@@ -75,18 +75,26 @@ function ReplayControl({ job, onJob, onError }) {
 
 function QueryPanel({ onSelect, onError }) {
   const [question, setQuestion] = useState("Show all tailgating events from camera 1 today");
-  const [result, setResult] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const suggestions = [
+    "Show suspected tailgating today",
+    "How many crowd gatherings were recorded?",
+    "List person-down incidents from the last hour"
+  ];
 
-  async function ask(event) {
-    event.preventDefault();
+  async function ask(event, promptedQuestion = question) {
+    event?.preventDefault();
+    if (!promptedQuestion.trim()) return;
     setLoading(true);
     try {
-      setResult(await request("/api/query", {
+      const result = await request("/api/query", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question, timezone: "Asia/Kolkata" })
-      }));
+        body: JSON.stringify({ question: promptedQuestion, timezone: "Asia/Kolkata" })
+      });
+      setMessages((previous) => [...previous, { question: promptedQuestion, result }]);
+      setQuestion("");
       onError("");
     } catch (exception) { onError(exception.message); }
     finally { setLoading(false); }
@@ -94,18 +102,25 @@ function QueryPanel({ onSelect, onError }) {
 
   return (
     <section className="query-panel panel">
-      <div><span className="eyebrow">INCIDENT QUERY</span><h2>Ask recorded history</h2></div>
+      <div><span className="eyebrow">ANALYST CHAT</span><h2>Ask about recorded incidents</h2><p className="metadata">Answers are grounded in stored events and cite the matching evidence.</p></div>
+      <div className="suggestions">{suggestions.map((suggestion) => <button type="button" className="suggestion" key={suggestion} onClick={() => { setQuestion(suggestion); ask(null, suggestion); }}>{suggestion}</button>)}</div>
       <form onSubmit={ask}>
-        <input aria-label="Incident question" value={question} onChange={(event) => setQuestion(event.target.value)} />
-        <button disabled={loading}>{loading ? "Searching…" : "Ask"}</button>
+        <input aria-label="Incident question" placeholder="Ask: any tailgating incidents today?" value={question} onChange={(event) => setQuestion(event.target.value)} />
+        <button disabled={loading}>{loading ? "Searching…" : "Send"}</button>
       </form>
-      {result && <div className={result.needs_clarification ? "query-answer clarification" : "query-answer"}>
-        <strong>{typeof result.answer === "string" ? result.answer : JSON.stringify(result.answer)}</strong>
-        {result.filters && <span className="metadata">Applied filters: {JSON.stringify(result.filters)}</span>}
-        {result.events?.map((event) => <button className="query-result" key={event.event_id} onClick={() => onSelect(event)}>
-          <span>{labels[event.category] ?? event.category}</span><small>{event.summary}</small><code>{event.event_id}</code>
-        </button>)}
-      </div>}
+      <div className="chat-history">
+        {messages.map(({ question: asked, result }, index) => <div className="chat-turn" key={`${asked}-${index}`}>
+          <div className="chat-question"><span className="chat-role">YOU</span>{asked}</div>
+          <div className={result.needs_clarification ? "query-answer clarification" : "query-answer"}>
+            <strong>{typeof result.answer === "string" ? result.answer : JSON.stringify(result.answer)}</strong>
+            {result.filters && <span className="metadata">Applied filters: {JSON.stringify(result.filters)}</span>}
+            {result.needs_clarification && <span className="metadata">Try one of the supported prompts above.</span>}
+            {result.events?.map((event) => <button className="query-result" key={event.event_id} onClick={() => onSelect(event)}>
+              <span>{labels[event.category] ?? event.category}</span><small>{event.summary}</small><code>Citation · {event.event_id}</code>
+            </button>)}
+          </div>
+        </div>)}
+      </div>
     </section>
   );
 }

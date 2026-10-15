@@ -255,6 +255,11 @@ def query(request: QueryIntent | NaturalQueryRequest) -> dict[str, Any]:
             return {
                 "answer": str(exc), "needs_clarification": True, "events": [],
                 "citations": [], "timezone": request.timezone,
+                "suggestions": [
+                    "Show suspected tailgating today",
+                    "How many crowd gatherings were recorded?",
+                    "List person-down incidents from the last hour",
+                ],
             }
     else:
         intent = request
@@ -277,4 +282,9 @@ def query(request: QueryIntent | NaturalQueryRequest) -> dict[str, Any]:
         "events": result,
         "citations": [{"event_id": item["event_id"]} for item in result],
         "coverage": {"fixture": True, "warning": "Coverage is limited to recorded fixture sessions."},
+        "suggestions": [
+            "Show suspected tailgating today",
+            "How many crowd gatherings were recorded?",
+            "List person-down incidents from the last hour",
+        ],
     }

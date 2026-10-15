@@ -36,6 +36,21 @@ def test_unsupported_category_requests_clarification() -> None:
         parse_natural_query(NaturalQueryRequest(question="Show gun incidents today", now_utc_ms=NOW))
 
 
+def test_chatbot_maps_natural_synonyms_to_supported_categories() -> None:
+    person_intent = parse_natural_query(NaturalQueryRequest(
+        question="Did someone fall on the ground today?", now_utc_ms=NOW
+    ))
+    crowd_intent = parse_natural_query(NaturalQueryRequest(
+        question="Are there large groups of people at the entrance?", now_utc_ms=NOW
+    ))
+    tailgate_intent = parse_natural_query(NaturalQueryRequest(
+        question="Any unauthorized access or people following through the door?", now_utc_ms=NOW
+    ))
+    assert person_intent.categories == ["person_down"]
+    assert crowd_intent.categories == ["crowd_gathering"]
+    assert tailgate_intent.categories == ["suspected_tailgating"]
+
+
 def test_query_api_returns_clarification_instead_of_guessing() -> None:
     from fastapi.testclient import TestClient
     from backend.main import app
