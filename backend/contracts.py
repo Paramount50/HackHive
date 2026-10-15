@@ -66,6 +66,8 @@ class QueryIntent(BaseModel):
     decision_states: list[DecisionState] = Field(
         default_factory=lambda: [DecisionState.ACCEPTED, DecisionState.NEEDS_REVIEW]
     )
+    review_statuses: list[ReviewStatus] = Field(default_factory=list, max_length=3)
+    has_ready_media: bool | None = None
     start_utc_ms: int | None = None
     end_utc_ms: int | None = None
     limit: int = Field(default=20, ge=1, le=100)

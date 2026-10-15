@@ -233,7 +233,9 @@ function App() {
   const [status, setStatus] = useState(null);
   const [events, setEvents] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [reviewStatus, setReviewStatus] = useState("");
+  const [evidenceFilter, setEvidenceFilter] = useState("");
   const [message, setMessage] = useState("Loading recorded incidents…");
   const [error, setError] = useState("");
   const [replayJob, setReplayJob] = useState(null);
@@ -250,8 +252,12 @@ function App() {
 
   async function loadEvents() {
     try {
-      const query = category ? `?category=${encodeURIComponent(category)}` : "";
-      const result = await request(`/api/events${query}`);
+      const filters = new URLSearchParams();
+      categories.forEach((category) => filters.append("category", category));
+      if (reviewStatus) filters.append("review_status", reviewStatus);
+      if (evidenceFilter) filters.append("has_evidence", evidenceFilter);
+      const query = filters.toString();
+      const result = await request(`/api/events${query ? `?${query}` : ""}`);
       setEvents(result.events);
       setMessage(result.events.length ? `${result.count} recorded incident(s)` : "No matching recorded incidents.");
       setError("");
@@ -261,7 +267,7 @@ function App() {
   useEffect(() => {
     loadStatus();
     loadEvents();
-  }, [category]);
+  }, [categories, reviewStatus, evidenceFilter]);
 
   useEffect(() => {
     if (!replayJob || terminalReplayStates.has(replayJob.status)) return undefined;
@@ -271,7 +277,7 @@ function App() {
       loadStatus();
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [replayJob?.status, category]);
+  }, [replayJob?.status, categories, reviewStatus, evidenceFilter]);
 
   async function runFixture(path = "/api/fixtures/run") {
     try {
@@ -316,7 +322,11 @@ function App() {
       <section className="workspace">
         <div className="feed panel">
           <div className="section-heading"><div><span className="eyebrow">INCIDENT TIMELINE</span><h2>Recorded incidents</h2></div>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}><option value="">All categories</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+            <div className="event-filters">
+              <label>Categories<select multiple value={categories} onChange={(event) => setCategories(Array.from(event.target.selectedOptions, (option) => option.value))}>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label>Review<select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="">Any review</option><option value="unreviewed">Unreviewed</option><option value="confirmed">Confirmed</option><option value="rejected">Rejected</option></select></label>
+              <label>Evidence<select value={evidenceFilter} onChange={(event) => setEvidenceFilter(event.target.value)}><option value="">Any evidence</option><option value="true">Playable</option><option value="false">Unavailable</option></select></label>
+            </div>
           </div>
           <p className="metadata">{message}</p>
           {events.map((event) => <EventCard key={event.event_id} event={event} selected={selected?.event_id === event.event_id} onSelect={selectEvent} onReview={review} />)}

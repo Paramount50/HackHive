@@ -453,6 +453,24 @@ class Store:
         if intent.decision_states:
             sql += f" AND e.decision_state IN ({','.join('?' for _ in intent.decision_states)})"
             params.extend(intent.decision_states)
+        if intent.review_statuses:
+            latest_review = """(SELECT r.action FROM reviews r WHERE r.event_id=e.event_id
+                                ORDER BY r.review_seq DESC LIMIT 1)"""
+            review_clauses = []
+            if ReviewStatus.UNREVIEWED in intent.review_statuses:
+                review_clauses.append(f"{latest_review} IS NULL")
+            actions = []
+            if ReviewStatus.CONFIRMED in intent.review_statuses:
+                actions.append("confirm")
+            if ReviewStatus.REJECTED in intent.review_statuses:
+                actions.append("reject")
+            if actions:
+                review_clauses.append(f"{latest_review} IN ({','.join('?' for _ in actions)})")
+                params.extend(actions)
+            sql += f" AND ({' OR '.join(review_clauses)})"
+        if intent.has_ready_media is not None:
+            predicate = "EXISTS" if intent.has_ready_media else "NOT EXISTS"
+            sql += f" AND {predicate}(SELECT 1 FROM media fm WHERE fm.event_id=e.event_id AND fm.status='ready')"
         if intent.start_utc_ms is not None:
             sql += " AND e.last_observed_utc_ms >= ?"
             params.append(intent.start_utc_ms)

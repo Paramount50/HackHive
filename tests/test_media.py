@@ -58,3 +58,5 @@ def test_ready_artifact_and_missing_fixture_have_distinct_states(tmp_path) -> No
     listed = store.list_events(QueryIntent())
     assert listed[0]["thumbnail_media_id"] == ready_id
     assert listed[0]["has_ready_media"] == 1
+    assert store.list_events(QueryIntent(has_ready_media=True))[0]["event_id"] == event_id
+    assert store.list_events(QueryIntent(has_ready_media=False)) == []

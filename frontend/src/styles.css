@@ -14,6 +14,8 @@ h1 { font-size: 32px; margin: 4px 0 0; } h2 { margin: 4px 0 0; } h3 { margin-bot
 .policy { gap: 24px; color: #b8c5d6; flex-wrap: wrap; } .policy strong { color: #f1f5f9; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .8fr); gap: 16px; margin-top: 16px; }
 .section-heading { border-bottom: 1px solid #263650; padding-bottom: 16px; }
+.event-filters { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; justify-content: flex-end; }
+.event-filters label { display: grid; gap: 4px; color: #8da1bb; font-size: 11px; } .event-filters select[multiple] { min-height: 88px; }
 select, button { min-height: 40px; border-radius: 7px; border: 1px solid #3b82c4; padding: 8px 12px; font: inherit; }
 select, input { background: #0b1220; color: #f1f5f9; } button { background: #60a5fa; color: #08111f; cursor: pointer; font-weight: 700; }
 input { min-height: 40px; border-radius: 7px; border: 1px solid #45617d; padding: 8px 10px; font: inherit; }

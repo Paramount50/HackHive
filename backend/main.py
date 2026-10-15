@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
-from .contracts import FixtureAnalysis, NaturalQueryRequest, QueryIntent, ReplayStartRequest, ReviewRequest, utc_now_ms
+from .contracts import Category, FixtureAnalysis, NaturalQueryRequest, QueryIntent, ReplayStartRequest, ReviewRequest, ReviewStatus, utc_now_ms
 from .ingest.manager import ReplayManager
 from .media import MediaExporter
 from .orchestrator import EventOrchestrator
@@ -265,12 +265,21 @@ def replay_frame(session_id: str) -> FileResponse:
 
 @app.get("/api/events")
 def events(
-    category: str | None = Query(default=None),
+    category: list[Category] = Query(default=[]),
+    camera_id: list[str] = Query(default=[]),
+    review_status: list[ReviewStatus] = Query(default=[]),
+    has_evidence: bool | None = None,
     start_utc_ms: int | None = None,
     end_utc_ms: int | None = None,
 ) -> dict[str, Any]:
-    categories = [category] if category else []
-    intent = QueryIntent(categories=categories, start_utc_ms=start_utc_ms, end_utc_ms=end_utc_ms)
+    intent = QueryIntent(
+        categories=category,
+        camera_ids=camera_id,
+        review_statuses=review_status,
+        has_ready_media=has_evidence,
+        start_utc_ms=start_utc_ms,
+        end_utc_ms=end_utc_ms,
+    )
     result = store.list_events(intent)
     return {"events": result, "count": len(result), "timezone": "Asia/Kolkata"}
 

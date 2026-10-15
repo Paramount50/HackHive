@@ -93,6 +93,8 @@ def test_review_is_idempotent_and_separate_from_system_decision() -> None:
     assert result["decision_state"] == "accepted"
     assert result["review_status"] == "confirmed"
     assert len(result["reviews"]) == 1
+    assert store.list_events(QueryIntent(review_statuses=["confirmed"]))[0]["event_id"] == event_id
+    assert store.list_events(QueryIntent(review_statuses=["unreviewed"])) == []
 
 
 def test_event_lookup_and_review_do_not_depend_on_list_limit() -> None:
