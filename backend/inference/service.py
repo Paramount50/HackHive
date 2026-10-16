@@ -115,6 +115,7 @@ class SemanticInferenceService:
             "state": self.state,
             "error": self.error,
             "pending": len(self.scheduler),
+            "capacity": self.scheduler.max_pending,
             "counters": dict(self.scheduler.counters),
             "model_id": self.metadata.get("model_id"),
             "model_revision": self.metadata.get("revision"),

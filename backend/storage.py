@@ -475,6 +475,7 @@ class Store:
         item["predicates"] = json.loads(row["predicates_json"])
         item["limitations"] = json.loads(row["limitations_json"])
         item["verification"] = self._verification_projection(event_id)
+        item["candidate"] = self._candidate_projection(event_id)
         if include_media:
             item["media"] = [
                 dict(media) for media in self.connection.execute(
@@ -508,6 +509,34 @@ class Store:
             "timings_ms": json.loads(row["timings_json"] or "{}"),
             "error_code": row["error_code"],
             "error": payload.get("error"),
+        }
+
+    def _candidate_projection(self, event_id: str) -> dict[str, Any]:
+        row = self.connection.execute(
+            """SELECT model_id,model_revision,prompt_version
+               FROM analysis_windows
+               WHERE reason='candidate' AND window_id IN (
+                 SELECT value FROM json_each((SELECT window_ids_json FROM events WHERE event_id=?))
+               )
+               ORDER BY rowid DESC LIMIT 1""",
+            (event_id,),
+        ).fetchone()
+        if row is None:
+            return {"source": "Unknown candidate source", "model_id": None}
+        model_id = row["model_id"] or ""
+        if model_id.startswith("xclip://"):
+            source = "XCLIP action ranking"
+        elif model_id == "candidate://cpu-rules":
+            source = "YOLO + temporal rule"
+        elif model_id.startswith("fixture://"):
+            source = "Deterministic fixture"
+        else:
+            source = model_id or "Unknown candidate source"
+        return {
+            "source": source,
+            "model_id": row["model_id"],
+            "model_revision": row["model_revision"],
+            "prompt_version": row["prompt_version"],
         }
 
     def add_media(
@@ -657,7 +686,11 @@ class Store:
                   WHERE m.event_id=e.event_id AND m.kind='keyframe' AND m.status='ready'
                   ORDER BY m.coverage_start_utc_ms,m.media_id LIMIT 1) AS thumbnail_media_id,
                  EXISTS(SELECT 1 FROM media em WHERE em.event_id=e.event_id AND em.status='ready')
-                  AS has_ready_media
+                  AS has_ready_media,
+                 EXISTS(SELECT 1 FROM media km WHERE km.event_id=e.event_id
+                        AND km.kind='keyframe' AND km.status='ready') AS has_keyframe,
+                 EXISTS(SELECT 1 FROM media cm WHERE cm.event_id=e.event_id
+                        AND cm.kind='clip' AND cm.status='ready') AS has_clip
                  FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
                  JOIN cameras c ON c.camera_id=s.camera_id WHERE 1=1"""
         params: list[Any] = []
@@ -705,6 +738,7 @@ class Store:
             item["predicates"] = json.loads(row["predicates_json"])
             item["limitations"] = json.loads(row["limitations_json"])
             item["verification"] = self._verification_projection(row["event_id"])
+            item["candidate"] = self._candidate_projection(row["event_id"])
             result.append(item)
         return result
 

@@ -171,6 +171,8 @@ def status() -> dict[str, Any]:
         "variant": vlm_variant,
         "selection_strategy": vlm_sampling_strategy,
     }
+    semantic_status.setdefault("variant", vlm_variant)
+    semantic_status.setdefault("capacity", 3)
     query_weights_available = (
         (chat_model_dir / "hackhive-chat-model.json").is_file()
         and (embedding_model_dir / "hackhive-embedding-model.json").is_file()

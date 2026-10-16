@@ -297,6 +297,21 @@ internal completeness value as an operator-facing score or probability.
 Verification: `python -m pytest -q` completed with 140 passed and one warning;
 the Vite production build completed successfully.
 
+Evidence-first incident desk — 2026-10-16: event API projections now expose
+candidate source and media availability alongside the persisted VLM lifecycle.
+Timeline cards show candidate source, review state, VLM verdict, evidence
+availability, camera/time and category maturity. The evidence drawer shows
+controlled predicates with local frame citations, sampling strategy/pool/
+selection latency, model revision/inference latency, authorization separately,
+human review controls and real limitations. Runtime health distinguishes YOLO,
+XCLIP, SmolVLM state/queue/model variant, sampling and chat availability; it
+does not imply accuracy. Chat citations continue to open the same drawer and
+raw filters are no longer prominent. Sampled JPEG clips are labeled “Sampled
+evidence clip.” Selected VLM images are not displayed because accessible frame
+copies are not currently persisted. Verification: `python -m pytest -q`
+completed with 140 passed and two dependency/deprecation warnings; the Vite
+production build completed successfully.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

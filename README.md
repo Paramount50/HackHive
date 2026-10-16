@@ -141,7 +141,11 @@ visible but no controlled incident is supported; `unknown` means the frames or
 context are insufficient. Required category evidence is checked independently:
 visual restricted-area evidence cannot establish authorization, and a different
 model category remains a category conflict rather than changing the stored event.
-The expanded categories are contract-ready but not accuracy-validated.
+Person-down, crowd, tailgating and XCLIP aggression candidates are integrated
+with candidate-conditioned verification. Fire/smoke and restricted-area
+intrusion remain contract/audit-only because they do not yet have production
+candidate generators. None of the categories has a frozen labelled accuracy
+evaluation yet.
 
 Each run creates a new `reports/vlm-<UTC timestamp>/` directory containing source
 hashes, hardware, exact model/prompt/runtime configuration, raw outputs and failures,

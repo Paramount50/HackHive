@@ -10,7 +10,35 @@ const labels = {
   fire_smoke: "Possible fire or smoke",
   intrusion_unauthorized_access: "Possible restricted-area intrusion"
 };
+const maturity = {
+  person_down: "Integrated",
+  crowd_gathering: "Integrated",
+  suspected_tailgating: "Integrated",
+  aggression_fight: "Integrated",
+  fire_smoke: "Experimental · no candidate generator",
+  intrusion_unauthorized_access: "Experimental · no candidate generator"
+};
+const verificationLabels = {
+  supported: "Supported",
+  contradicted: "Contradicted",
+  inconclusive: "Inconclusive",
+  insufficient_evidence: "Insufficient evidence",
+  category_conflict: "Category conflict",
+  pending: "Pending",
+  running: "Running",
+  completed: "Completed",
+  rejected: "Rejected",
+  failed: "Failed",
+  expired: "Expired",
+  not_configured: "Not configured",
+  not_run: "Not run"
+};
 const terminalReplayStates = new Set(["completed", "failed", "stopped"]);
+
+const titleCase = (value = "") => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+const formatTime = (value) => value ? new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "Unknown";
+const displayVerification = (verification) => verificationLabels[verification?.verdict ?? verification?.status] ?? titleCase(verification?.status ?? "not_run");
+const evidenceAvailability = (event) => [event.has_keyframe && "Keyframe", event.has_clip && "Sampled evidence clip"].filter(Boolean).join(" · ") || "Unavailable";
 
 async function request(path, options) {
   const response = await fetch(path, options);
@@ -20,12 +48,15 @@ async function request(path, options) {
 
 function StatusBar({ status }) {
   const analysis = status?.analysis;
+  const vlm = analysis?.vlm;
+  const query = status?.query;
   return (
     <section className="status-bar panel">
-      <div><span className="eyebrow">SOURCE</span><strong>Local video</strong><span className="badge replay">REPLAY</span></div>
-      <div><span className="eyebrow">HEALTH</span><strong>{status?.source?.health ?? "loading"}</strong></div>
-      <div><span className="eyebrow">ANALYSIS</span><strong className={analysis?.degraded ? "warning" : ""}>{analysis?.mode ?? "loading"}</strong></div>
-      <div><span className="eyebrow">POLICY</span><strong>{analysis?.message ?? "Review required · local processing"}</strong></div>
+      <div><span className="eyebrow">YOLO</span><strong className={analysis?.detector_ready ? "healthy" : "warning"}>{analysis?.detector_ready ? "Runtime ready" : "Unavailable"}</strong><span className="metadata">{analysis?.detector_weights ?? "No local weights"}</span></div>
+      <div><span className="eyebrow">XCLIP</span><strong className={analysis?.action_model_ready ? "healthy" : "warning"}>{analysis?.action_model_ready ? "Runtime ready" : "Unavailable"}</strong><span className="metadata">Action ranking · uncalibrated</span></div>
+      <div><span className="eyebrow">SMOLVLM</span><strong className={vlm?.state === "ready" ? "healthy" : "warning"}>{titleCase(vlm?.state ?? "loading")}</strong><span className="metadata">{vlm?.variant ?? "—"} · queue {vlm?.pending ?? 0}/{vlm?.capacity ?? 3}</span></div>
+      <div><span className="eyebrow">SAMPLING</span><strong>{titleCase(vlm?.selection_strategy ?? "swift")}</strong><span className="metadata">Four-frame verification budget</span></div>
+      <div><span className="eyebrow">CHAT</span><strong className={query?.state === "ready" ? "healthy" : "warning"}>{titleCase(query?.state ?? "loading")}</strong><span className="metadata">Qwen + MiniLM · {query?.device ?? "CPU"}</span></div>
     </section>
   );
 }
@@ -169,7 +200,6 @@ function QueryPanel({ onSelect, onError }) {
             {result.retrieval_mode && <span className="metadata">Retrieval: {result.retrieval_mode} · {result.citations?.length ?? 0} recorded source(s)</span>}
             {result.model?.id && <span className="metadata">Local model: {result.model.id}</span>}
             {result.retrieval?.degraded_reason && <span className="metadata">Fallback: {result.retrieval.degraded_reason}</span>}
-            {result.filters && <span className="metadata">Applied filters: {JSON.stringify(result.filters)}</span>}
             {result.needs_clarification && <span className="metadata">Try one of the supported prompts above.</span>}
             {result.events?.map((event) => <button className="query-result" key={event.event_id} onClick={() => onSelect(event)}>
               <span>{labels[event.category] ?? event.category}</span><small>{event.summary}</small>{event.semantic_score != null && <small>Semantic match · {Math.round(event.semantic_score * 100)}%</small>}<code>Citation · {event.event_id}</code>
@@ -190,11 +220,17 @@ function EventCard({ event, selected, onSelect, onReview }) {
       <div className="event-card-body">
       <div className="event-heading">
         <span className={`category ${event.category}`}>{labels[event.category] ?? event.category}</span>
-        <span className="review-state">{event.review_status}</span>
+        <span className="review-state">{titleCase(event.review_status)}</span>
       </div>
       <p>{event.summary}</p>
-      <div className="metadata">System decision: {event.decision_state}</div>
-      <div className="metadata">{event.has_ready_media ? "Keyframe or clip available" : "No playable evidence available"}</div>
+      <div className="card-facts">
+        <span><b>Status</b>{titleCase(event.decision_state)}</span>
+        <span><b>Candidate source</b>{event.candidate?.source ?? "Unknown"}</span>
+        <span><b>Verification</b><i className={`verification ${event.verification?.verdict ?? event.verification?.status}`}>{displayVerification(event.verification)}</i></span>
+        <span><b>Evidence</b>{evidenceAvailability(event)}</span>
+        <span><b>Camera / time</b>{event.camera_name ?? event.camera_id} · {formatTime(event.start_utc_ms)}</span>
+      </div>
+      <span className={`maturity ${maturity[event.category]?.startsWith("Integrated") ? "integrated" : "experimental"}`}>{maturity[event.category]}</span>
       <div className="actions">
         <button onClick={(e) => { e.stopPropagation(); onReview(event, "confirm"); }}>Confirm</button>
         <button className="danger" onClick={(e) => { e.stopPropagation(); onReview(event, "reject"); }}>Reject</button>
@@ -204,9 +240,13 @@ function EventCard({ event, selected, onSelect, onReview }) {
   );
 }
 
-function EvidenceDrawer({ event, onClose }) {
+function EvidenceDrawer({ event, onClose, onReview }) {
   if (!event) return <aside className="drawer panel empty">Select an incident to inspect its evidence.</aside>;
   const media = event.media ?? [];
+  const verification = event.verification ?? { status: "not_run", verdict: null };
+  const observations = verification.observation?.observations ?? [];
+  const selection = verification.selection;
+  const totalLatency = verification.timings_ms?.total;
   return (
     <aside className="drawer panel">
       <div className="drawer-header"><h2>Evidence</h2><button onClick={onClose}>Close</button></div>
@@ -214,18 +254,20 @@ function EvidenceDrawer({ event, onClose }) {
         {media.filter((item) => item.status === "ready" && item.kind === "keyframe").map((item) =>
           <img key={item.media_id} src={`/api/media/${item.media_id}`} alt="Incident keyframe" />)}
         {media.filter((item) => item.status === "ready" && item.kind !== "keyframe").map((item) =>
-          <video key={item.media_id} controls preload="metadata" src={`/api/media/${item.media_id}`}>Video playback is unavailable.</video>)}
+          <div key={item.media_id}><span className="media-label">Sampled evidence clip</span><video controls preload="metadata" src={`/api/media/${item.media_id}`}>Video playback is unavailable.</video></div>)}
         {!media.some((item) => item.status === "ready") && <div className="evidence-placeholder">No playable evidence<br /><span>{media.length ? media.map((item) => `${item.kind}: ${item.status}`).join(" · ") : "No media record was created."}</span></div>}
       </div>
-      <h3>{labels[event.category]}</h3>
-      <p>{event.summary}</p>
-      <dl>
-        <dt>System prediction</dt><dd>{event.decision_state}</dd>
-        <dt>Human review</dt><dd>{event.review_status}</dd>
-        <dt>Authorization</dt><dd>{event.authorization_state} · {event.access_evidence_source ?? "no policy/access evidence"}</dd>
-      </dl>
-      <h3>Limitations</h3>
-      <ul>{event.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
+      <section className="evidence-section"><span className="eyebrow">INCIDENT</span><h3>{labels[event.category]}</h3><p>{event.summary}</p>
+        <dl><dt>Candidate source</dt><dd>{event.candidate?.source ?? "Unknown"}</dd><dt>Candidate state</dt><dd>{titleCase(event.decision_state)}</dd><dt>Camera / time</dt><dd>{event.camera_name ?? event.camera_id} · {formatTime(event.start_utc_ms)}</dd><dt>Category maturity</dt><dd>{maturity[event.category]}</dd></dl>
+      </section>
+      <section className="evidence-section"><span className="eyebrow">SEMANTIC VERIFICATION</span><h3 className={`verification ${verification.verdict ?? verification.status}`}>{displayVerification(verification)}</h3>
+        {observations.length ? <ul className="predicate-list">{observations.map((item) => <li key={item.predicate} className={item.supported === true ? "positive" : item.supported === false ? "negative" : "unknown"}><span>{item.supported === true ? "✓" : item.supported === false ? "✕" : "?"}</span><div><strong>{titleCase(item.predicate)}</strong><small>{item.supported === true ? `Frames ${item.frame_indices.join(", ")}` : item.supported === false ? "Not supported" : "Insufficient visual evidence"}</small></div></li>)}</ul> : <p className="metadata">{verification.error ?? "No visual predicate result is available."}</p>}
+      </section>
+      {selection && <section className="evidence-section"><span className="eyebrow">SAMPLING</span><dl><dt>Strategy</dt><dd>{titleCase(selection.strategy)}</dd><dt>Candidate pool</dt><dd>{selection.candidate_frame_count} frames</dd><dt>Selected</dt><dd>{selection.target_frames} frames · indices {selection.selected_indices?.join(", ")}</dd>{selection.taylor_order && <><dt>Taylor order</dt><dd>{selection.taylor_order}</dd></>}<dt>Selection latency</dt><dd>{selection.latency_ms?.toFixed(1)} ms</dd></dl></section>}
+      <section className="evidence-section"><span className="eyebrow">MODEL</span><dl><dt>Model</dt><dd>{verification.model_id ?? "Not run"}</dd><dt>Revision</dt><dd className="mono">{verification.model_revision ?? "—"}</dd><dt>Inference latency</dt><dd>{totalLatency != null ? `${totalLatency.toFixed(1)} ms` : "—"}</dd>{verification.error_code && <><dt>Error</dt><dd>{verification.error_code}</dd></>}</dl></section>
+      <section className="evidence-section"><span className="eyebrow">HUMAN REVIEW</span><h3>{titleCase(event.review_status)}</h3><div className="actions"><button onClick={() => onReview(event, "confirm")}>Confirm</button><button className="danger" onClick={() => onReview(event, "reject")}>Reject</button></div></section>
+      {(event.category === "suspected_tailgating" || event.category === "intrusion_unauthorized_access") && <section className="evidence-section"><span className="eyebrow">AUTHORIZATION</span><p>{titleCase(event.authorization_state)} · {event.access_evidence_source ?? "No policy/access evidence"}</p></section>}
+      <section className="evidence-section"><span className="eyebrow">LIMITATIONS</span><ul>{event.limitations.map((item) => <li key={item}>{item}</li>)}</ul></section>
       <p className="metadata">Event ID: {event.event_id}</p>
     </aside>
   );
@@ -334,7 +376,7 @@ function App() {
           {events.map((event) => <EventCard key={event.event_id} event={event} selected={selected?.event_id === event.event_id} onSelect={selectEvent} onReview={review} />)}
           {!events.length && <div className="empty-state">No matching recorded incidents.</div>}
         </div>
-        <EvidenceDrawer event={selected} onClose={() => setSelected(null)} />
+        <EvidenceDrawer event={selected} onClose={() => setSelected(null)} onReview={review} />
       </section>
       <footer>{status?.analysis?.message ?? "Checking local analysis availability."} Candidate events remain unreviewed until a person checks them.</footer>
     </main>
