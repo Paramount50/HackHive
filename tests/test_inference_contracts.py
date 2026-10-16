@@ -2,7 +2,7 @@ import json
 
 import unittest
 
-from backend.inference.contracts import parse_observation
+from backend.inference.contracts import parse_candidate_observation, parse_observation
 from backend.inference.hardware import gpu_budget_mib
 
 
@@ -47,6 +47,42 @@ class InferenceContractTests(unittest.TestCase):
         ])
         with self.assertRaises(ValueError):
             parse_observation(duplicate, 4)
+
+    def test_candidate_verification_keeps_local_frame_bounds_strict(self):
+        payload = {
+            "outcome": "crowd_gathering",
+            "summary": "People remain together.",
+            "evidence": {
+                "duration_reached": True,
+                "people_in_zone": True,
+                "scene_visibility": True,
+                "threshold_reached": True,
+            },
+            "evidence_frames": {
+                "duration_reached": [0, 0],
+                "people_in_zone": [0],
+                "scene_visibility": [0],
+                "threshold_reached": [0],
+            },
+            "limitations": [],
+        }
+        from backend.inference.contracts import normalize_candidate_frame_citations
+
+        normalized, notes = normalize_candidate_frame_citations(json.dumps(payload), 4)
+        self.assertTrue(notes)
+        self.assertEqual(
+            parse_candidate_observation(normalized, 4, "crowd_gathering").observations[0].frame_indices,
+            [0],
+        )
+        for invalid in ([4, 4], [-1, -1], [True, True], [], [0, 0, 0, 0, 0]):
+            payload["evidence_frames"]["duration_reached"] = invalid
+            normalized, _ = normalize_candidate_frame_citations(json.dumps(payload), 4)
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                parse_candidate_observation(normalized, 4, "crowd_gathering")
+
+    def test_candidate_verification_rejects_more_than_four_frames(self):
+        with self.assertRaisesRegex(ValueError, "one to four frames"):
+            parse_candidate_observation("{}", 5, "crowd_gathering")
 
     def test_expanded_categories_use_only_their_allowed_predicates(self):
         valid = [

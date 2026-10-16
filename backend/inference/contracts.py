@@ -145,6 +145,8 @@ def parse_candidate_observation(
     raw: str, frame_count: int, expected_outcome: str
 ) -> VisualObservation:
     """Parse the fixed per-predicate shape used by candidate verification."""
+    if not 1 <= frame_count <= 4:
+        raise ValueError("expected one to four frames")
     if expected_outcome not in VERIFICATION_CONTRACTS:
         raise ValueError("expected outcome is not supported by visual verification")
     if len(raw) > 8_000:
@@ -176,12 +178,19 @@ def parse_candidate_observation(
                 "schema_or_semantic_validation", "candidate evidence must be boolean or null"
             )
         indices = evidence_frames[predicate]
-        if (
-            not isinstance(indices, list)
-            or not 1 <= len(indices) <= 4
-            or any(type(index) is not int for index in indices)
-            or len(set(indices)) != len(indices)
-        ):
+        if not isinstance(indices, list) or not 1 <= len(indices) <= 4:
+            raise ObservationValidationError(
+                "frame_validation", "candidate evidence_frames must contain one to four indices"
+            )
+        if any(type(index) is not int for index in indices):
+            raise ObservationValidationError(
+                "frame_validation", "candidate evidence_frames must contain integer indices"
+            )
+        if any(index < 0 or index >= frame_count for index in indices):
+            raise ObservationValidationError(
+                "frame_validation", "evidence references a frame outside this request"
+            )
+        if len(set(indices)) != len(indices):
             raise ObservationValidationError(
                 "frame_validation", "candidate evidence_frames must contain distinct frame indices"
             )
@@ -200,10 +209,45 @@ def parse_candidate_observation(
         value = VisualObservation.model_validate(normalized)
     except ValueError as exc:
         raise ObservationValidationError("schema_or_semantic_validation", str(exc)) from exc
-    for observation in value.observations:
-        if any(index < 0 or index >= frame_count for index in observation.frame_indices):
-            raise ObservationValidationError("frame_validation", "evidence references a frame outside this request")
     return value
+
+
+def normalize_candidate_frame_citations(
+    raw: str, frame_count: int
+) -> tuple[str, list[str]]:
+    """Collapse redundant valid local citations while preserving raw output for audit.
+
+    This intentionally does not repair malformed, empty, oversized, non-integer, or
+    out-of-range citation arrays. The strict candidate parser remains authoritative
+    for those failures.
+    """
+    if not 1 <= frame_count <= 4:
+        raise ValueError("expected one to four frames")
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw, []
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("evidence_frames"), dict):
+        return raw, []
+    normalized_predicates: list[str] = []
+    for predicate, indices in parsed["evidence_frames"].items():
+        if (
+            not isinstance(indices, list)
+            or not 1 <= len(indices) <= 4
+            or any(type(index) is not int for index in indices)
+            or any(index < 0 or index >= frame_count for index in indices)
+        ):
+            continue
+        distinct = list(dict.fromkeys(indices))
+        if len(distinct) != len(indices):
+            parsed["evidence_frames"][predicate] = distinct
+            normalized_predicates.append(str(predicate))
+    if not normalized_predicates:
+        return raw, []
+    names = ", ".join(sorted(normalized_predicates))
+    return json.dumps(parsed, separators=(",", ":")), [
+        f"Repeated local frame citations were collapsed for: {names}."
+    ]
 
 
 def verification_verdict(observation: VisualObservation, expected_outcome: str) -> str:

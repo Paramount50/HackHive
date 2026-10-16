@@ -1,7 +1,10 @@
 from pathlib import Path
+import os
+import sys
+from types import SimpleNamespace
 
 from backend.ingest.replay import FramePacket
-from backend.perception.pipeline import BoxDetection, PerceptionPipeline, ScenePolicy
+from backend.perception.pipeline import BoxDetection, PerceptionPipeline, ScenePolicy, YoloDetector
 from backend.perception.rules import CandidateCategory, CandidateRules
 
 
@@ -73,3 +76,20 @@ def test_posture_uses_pixel_aspect_ratio_on_widescreen_source():
     frame = FramePacket("cam-1", "session-1", 0, 0, 10000, 1920, 1080, "frame.jpg", False)
     detections, _ = pipeline.process(frame)
     assert detections[0].horizontal_posture  # 120/100, not (120/1920)/(100/1080)
+
+
+def test_yolo_uses_writable_project_config_dir_before_import(tmp_path, monkeypatch):
+    config_dir = tmp_path / "ultralytics-settings"
+    initialized_with = []
+
+    class StubYolo:
+        def __init__(self, weights):
+            initialized_with.append(os.environ.get("YOLO_CONFIG_DIR"))
+
+    monkeypatch.setenv("YOLO_CONFIG_DIR", str(config_dir))
+    monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=StubYolo))
+
+    YoloDetector("weights.pt")
+
+    assert config_dir.is_dir()
+    assert initialized_with == [str(config_dir.resolve())]

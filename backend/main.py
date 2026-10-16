@@ -26,12 +26,12 @@ from .uploads import UploadValidationError, save_recording_upload
 
 app = FastAPI(title="HackHive Local Event Desk", version="0.1.0")
 database_path = Path("data") / "hackhive.sqlite"
-store = Store(database_path)
+media_root = (Path("data") / "media").resolve()
+store = Store(database_path, media_root=media_root)
 store.seed_camera()
 recordings_root = Path(os.environ.get("HACKHIVE_RECORDINGS_DIR", "recordings"))
 max_upload_bytes = int(os.environ.get("HACKHIVE_MAX_UPLOAD_MIB", "250")) * 1024 * 1024
 replay_manager = ReplayManager(recordings_root, Path("data") / "replay_frames")
-media_root = (Path("data") / "media").resolve()
 detector_weights = Path(os.environ.get("HACKHIVE_DETECTOR_WEIGHTS", "models/yolo11n.pt")).resolve()
 action_model_dir = Path(os.environ.get("HACKHIVE_ACTION_MODEL_DIR", "models/xclip-base-patch32")).resolve()
 action_classifier: XClipActionClassifier | None = None

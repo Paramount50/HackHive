@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,12 @@ class YoloDetector:
     """Optional Ultralytics adapter; model installation and weights are a GPU-owner handoff."""
 
     def __init__(self, weights: str | Path, *, device: str = "cpu", image_size: int = 416) -> None:
+        config_dir = Path(os.environ.get(
+            "YOLO_CONFIG_DIR",
+            Path(__file__).resolve().parents[2] / "data" / "ultralytics",
+        )).resolve()
+        config_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["YOLO_CONFIG_DIR"] = str(config_dir)
         try:
             from ultralytics import YOLO
         except ImportError as exc:

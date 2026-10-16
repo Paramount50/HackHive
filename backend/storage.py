@@ -148,13 +148,43 @@ CREATE INDEX IF NOT EXISTS idx_recordings_created ON recordings(created_utc_ms D
 
 
 class Store:
-    def __init__(self, path: str | Path = ":memory:") -> None:
+    def __init__(self, path: str | Path = ":memory:", *, media_root: str | Path | None = None) -> None:
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.media_root = (
+            Path(media_root).resolve() if media_root is not None
+            else Path(path).resolve().parent / "media" if path != ":memory:"
+            else None
+        )
         self.connection = sqlite3.connect(path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.connection.executescript(SCHEMA)
         self.connection.execute("PRAGMA journal_mode=WAL")
+
+    def _mark_missing_media(self, event_id: str | None = None, media_id: str | None = None) -> None:
+        if self.media_root is None:
+            return
+        sql = "SELECT media_id,relative_path FROM media WHERE status='ready'"
+        params: list[str] = []
+        if event_id is not None:
+            sql += " AND event_id=?"
+            params.append(event_id)
+        if media_id is not None:
+            sql += " AND media_id=?"
+            params.append(media_id)
+        missing_ids = []
+        for row in self.connection.execute(sql, params).fetchall():
+            path = (self.media_root / row["relative_path"]).resolve()
+            if not path.is_relative_to(self.media_root) or not path.is_file():
+                missing_ids.append(row["media_id"])
+        if missing_ids:
+            with self.connection:
+                self.connection.executemany(
+                    """UPDATE media SET status='missing',
+                       failure_reason='artifact file is missing from local media storage'
+                       WHERE media_id=? AND status='ready'""",
+                    ((media_id,) for media_id in missing_ids),
+                )
 
     def close(self) -> None:
         self.connection.close()
@@ -359,6 +389,7 @@ class Store:
             "error_code": error_code,
             "validation_stage": result.get("validation_stage"),
             "validation_error": result.get("validation_error"),
+            "validation_notes": result.get("validation_notes", []),
             "hit_max_new_tokens": result.get("hit_max_new_tokens"),
             "eos_reached": result.get("eos_reached"),
             "candidate_category": result.get("candidate_category", job.expected_outcome),
@@ -393,6 +424,10 @@ class Store:
             window_ids.append(window_id)
             window_ids = list(dict.fromkeys(window_ids))
             limitations = json.loads(current["limitations_json"])
+            for note in result.get("validation_notes", []):
+                limitation = f"VLM output normalization: {str(note)[:300]}"
+                if limitation not in limitations:
+                    limitations.append(limitation)
             if verdict is not None:
                 limitation = f"VLM verification verdict: {verdict}."
                 if limitation not in limitations:
@@ -498,6 +533,7 @@ class Store:
         return dict(row) if row else None
 
     def get_event(self, event_id: str, *, include_media: bool = False) -> dict[str, Any] | None:
+        self._mark_missing_media(event_id=event_id)
         row = self.connection.execute(
             """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode
                FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
@@ -547,6 +583,7 @@ class Store:
             "timings_ms": json.loads(row["timings_json"] or "{}"),
             "error_code": row["error_code"],
             "error": payload.get("error"),
+            "validation_notes": payload.get("validation_notes", []),
         }
 
     def _candidate_projection(self, event_id: str) -> dict[str, Any]:
@@ -617,6 +654,7 @@ class Store:
         return media_id
 
     def get_media(self, media_id: str) -> dict[str, Any] | None:
+        self._mark_missing_media(media_id=media_id)
         row = self.connection.execute("SELECT * FROM media WHERE media_id=?", (media_id,)).fetchone()
         return dict(row) if row else None
 
@@ -719,6 +757,7 @@ class Store:
         return status, [dict(row) for row in rows]
 
     def list_events(self, intent: QueryIntent) -> list[dict[str, Any]]:
+        self._mark_missing_media()
         sql = """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode,
                  (SELECT m.media_id FROM media m
                   WHERE m.event_id=e.event_id AND m.kind='keyframe' AND m.status='ready'
@@ -728,7 +767,7 @@ class Store:
                  EXISTS(SELECT 1 FROM media km WHERE km.event_id=e.event_id
                         AND km.kind='keyframe' AND km.status='ready') AS has_keyframe,
                  EXISTS(SELECT 1 FROM media cm WHERE cm.event_id=e.event_id
-                        AND cm.kind='clip' AND cm.status='ready') AS has_clip
+                        AND cm.kind='event_clip' AND cm.status='ready') AS has_clip
                  FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
                  JOIN cameras c ON c.camera_id=s.camera_id WHERE 1=1"""
         params: list[Any] = []

@@ -99,8 +99,10 @@ predicate in the selected category. The application still normalizes that
 response into its existing observations contract and retains the raw JSON.
 The model sees only local frame labels `0..3`; source PTS values remain internal
 metadata and are persisted in the request provenance. Frame indices are
-constrained to `0..3` and invalid references are rejected, never clamped or
-removed; constrained decoding does not replace downstream validation. Candidate
+constrained to `0..3`; repeated references are collapsed only when the complete
+citation list is otherwise valid and local, with a normalization note and the raw
+response retained. Out-of-range, malformed, empty, or oversized references are
+rejected, never clamped or removed; constrained decoding does not replace downstream validation. Candidate
 summaries are deliberately limited to one concise sentence rather than relying
 on a larger generation budget.
 
@@ -207,6 +209,11 @@ Install the detector dependency and fetch the small YOLO11n weights once while o
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -c "from ultralytics import YOLO; YOLO('models/yolo11n.pt')"
 ```
+
+The backend creates `data/ultralytics` and configures `YOLO_CONFIG_DIR` there
+before loading Ultralytics, avoiding writes to protected per-user Windows settings.
+Set `YOLO_CONFIG_DIR` before starting the backend only if you need another
+writable settings directory.
 
 For action-ranking candidates, install the GPU dependencies and download the pinned
 XCLIP model once while online:

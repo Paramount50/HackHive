@@ -41,7 +41,9 @@ def test_media_export_is_atomic_and_records_actual_coverage(tmp_path) -> None:
 
 
 def test_ready_artifact_and_missing_fixture_have_distinct_states(tmp_path) -> None:
-    store = Store()
+    media_root = tmp_path / "media"
+    exporter = MediaExporter(media_root)
+    store = Store(media_root=media_root)
     session = store.create_session(1_000)
     event_id = store.record_analysis(
         session, 2_000, 3_000,
@@ -49,8 +51,14 @@ def test_ready_artifact_and_missing_fixture_have_distinct_states(tmp_path) -> No
         "media-event",
     )
     packet = make_packets(tmp_path)[0]
-    artifact = MediaExporter(tmp_path / "media").export_keyframe(event_id, packet)
+    artifact = exporter.export_keyframe(event_id, packet)
+    clip_artifact = exporter.export_clip(
+        event_id, make_packets(tmp_path),
+        requested_start_utc_ms=9_000,
+        requested_end_utc_ms=13_000,
+    )
     ready_id = store.add_media_artifact(event_id, artifact)
+    clip_id = store.add_media_artifact(event_id, clip_artifact)
     missing_id = store.add_media(event_id)
     assert store.get_media(ready_id)["status"] == MediaStatus.READY
     assert store.get_media(ready_id)["sha256"] == artifact.sha256
@@ -58,5 +66,28 @@ def test_ready_artifact_and_missing_fixture_have_distinct_states(tmp_path) -> No
     listed = store.list_events(QueryIntent())
     assert listed[0]["thumbnail_media_id"] == ready_id
     assert listed[0]["has_ready_media"] == 1
+    assert listed[0]["has_clip"] == 1
     assert store.list_events(QueryIntent(has_ready_media=True))[0]["event_id"] == event_id
     assert store.list_events(QueryIntent(has_ready_media=False)) == []
+
+    (media_root / artifact.relative_path).unlink()
+    (media_root / clip_artifact.relative_path).unlink()
+    stale = store.list_events(QueryIntent())[0]
+    assert stale["thumbnail_media_id"] is None
+    assert stale["has_ready_media"] == 0
+    assert stale["has_keyframe"] == 0
+    assert stale["has_clip"] == 0
+    assert store.list_events(QueryIntent(has_ready_media=True)) == []
+    assert store.list_events(QueryIntent(has_ready_media=False))[0]["event_id"] == event_id
+    assert store.get_media(ready_id)["status"] == MediaStatus.MISSING
+    assert store.get_media(clip_id)["failure_reason"] == (
+        "artifact file is missing from local media storage"
+    )
+
+
+def test_database_store_defaults_media_root_next_to_database(tmp_path):
+    database = tmp_path / "data" / "hackhive.sqlite"
+
+    store = Store(database)
+
+    assert store.media_root == (tmp_path / "data" / "media").resolve()

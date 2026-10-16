@@ -1,0 +1,1249 @@
+{
+  "run_utc": "2026-10-16T01:57:53.353535+00:00",
+  "sampling_fps": 5,
+  "pace": false,
+  "decode_strategy": "sequential",
+  "model_variant": "500m",
+  "sampling_strategy": "swift",
+  "resource_before": {
+    "measured_at": "2026-10-16T01:57:53.353535+00:00",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "total_mib": 6144,
+        "free_mib": 4461,
+        "used_mib": 1534,
+        "driver": "591.74",
+        "provisional_budget_mib": 3437
+      }
+    ],
+    "ram": {
+      "total_mib": 16236,
+      "available_mib": 5249,
+      "load_percent": 67
+    },
+    "torch_cuda": {
+      "free_mib": 5118.0,
+      "total_mib": 6143.5,
+      "allocated_mib": 0.0,
+      "peak_allocated_mib": 0.0
+    }
+  },
+  "clips": [
+    {
+      "source": "8d00e66a-89d6-4ca2-96a6-f0b8315733a1.avi",
+      "session_id": "237dd8cc-b425-4cea-9726-7f06fd3f1112",
+      "replay_status": "completed",
+      "replay_error": null,
+      "sampled_frames": 33,
+      "events_created": 2,
+      "wall_time_ms": 37046.1,
+      "events": [
+        {
+          "event_id": "d6ff2832-7f69-4d0f-9844-1357dfd52fe3",
+          "category": "aggression_fight",
+          "candidate_key": "237dd8cc-b425-4cea-9726-7f06fd3f1112:aggression_fight:camera-window",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.593).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                0,
+                1,
+                3,
+                4,
+                6,
+                7,
+                9,
+                10
+              ],
+              "details": {
+                "top_category": "aggression_fight",
+                "class_scores": {
+                  "aggression_fight": 7.051737944285075,
+                  "person_down": 4.649626572926839,
+                  "crowd_gathering": 6.186389764149983,
+                  "none": 5.304831504821777
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.5932099005372053,
+                  "person_down": 0.05370128491141858,
+                  "crowd_gathering": 0.24968499916201167,
+                  "none": 0.10340381538936434
+                },
+                "margin": 0.34352490137519365,
+                "latency_ms": 554.9456000153441,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "aggression_fight",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "contradicted",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "swift_latent_taylor_v1",
+              "candidate_frame_count": 11,
+              "selected_indices": [
+                0,
+                1,
+                2,
+                7
+              ],
+              "selected_source_pts_ms": [
+                0,
+                200,
+                400,
+                1400
+              ],
+              "target_frames": 4,
+              "taylor_order": 3,
+              "latency_ms": 590.0748999847565,
+              "error": null
+            },
+            "timings_ms": {
+              "preprocess": 162.56739999516867,
+              "inference": 13503.83800000418,
+              "validation": 1.0509999992791563,
+              "total": 13667.458299983991
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        },
+        {
+          "event_id": "7d34cc2c-b020-406f-a5ff-c6814744455a",
+          "category": "crowd_gathering",
+          "candidate_key": "237dd8cc-b425-4cea-9726-7f06fd3f1112:crowd_gathering:default-zone",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible crowd gathering flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.403).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                10,
+                11,
+                13,
+                14,
+                16,
+                17,
+                19,
+                20
+              ],
+              "details": {
+                "top_category": "crowd_gathering",
+                "class_scores": {
+                  "aggression_fight": 2.9563749631245932,
+                  "person_down": 2.0262871583302817,
+                  "crowd_gathering": 3.526848077774048,
+                  "none": 3.1559178034464517
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.2280778722118852,
+                  "person_down": 0.08998106961867654,
+                  "crowd_gathering": 0.40349344009950555,
+                  "none": 0.2784476180699327
+                },
+                "margin": 0.12504582202957287,
+                "latency_ms": 268.40920001268387,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "crowd_gathering",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "supported",
+            "validation_notes": [
+              "Repeated local frame citations were collapsed for: duration_reached, people_in_zone, scene_visibility, threshold_reached."
+            ],
+            "error": null,
+            "selection": {
+              "strategy": "uniform_fallback",
+              "candidate_frame_count": 16,
+              "selected_indices": [
+                0,
+                5,
+                10,
+                15
+              ],
+              "selected_source_pts_ms": [
+                0,
+                1400,
+                2600,
+                4000
+              ],
+              "target_frames": 4,
+              "taylor_order": null,
+              "latency_ms": 0.04129999433644116,
+              "error": "ValueError: candidate timestamps are too irregular for Taylor sampling"
+            },
+            "timings_ms": {
+              "preprocess": 143.4984999941662,
+              "inference": 13064.84000000637,
+              "validation": 0.40610000723972917,
+              "total": 13208.745200012345
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ],
+      "source_sha256": "ae9704479dc7adb8b0273468b0495c7d4b11f3fb4697c0d8e2f81dedb6437c6d"
+    },
+    {
+      "source": "ac3f4418-4c73-4a0c-b2cd-fcd23e5c769b.avi",
+      "session_id": "174dcd9d-149d-4e3c-976e-9939a83f498e",
+      "replay_status": "completed",
+      "replay_error": null,
+      "sampled_frames": 49,
+      "events_created": 1,
+      "wall_time_ms": 17459.7,
+      "events": [
+        {
+          "event_id": "01998069-cc35-4838-96a3-953d0ca33936",
+          "category": "person_down",
+          "candidate_key": "174dcd9d-149d-4e3c-976e-9939a83f498e:person_down:camera-window",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible person down flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.815).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                0,
+                1,
+                3,
+                4,
+                6,
+                7,
+                9,
+                10
+              ],
+              "details": {
+                "top_category": "person_down",
+                "class_scores": {
+                  "aggression_fight": 6.585319836934407,
+                  "person_down": 9.219188849131266,
+                  "crowd_gathering": 5.421546459197998,
+                  "none": 7.198757489522298
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.05852530436332145,
+                  "person_down": 0.8151142000046325,
+                  "crowd_gathering": 0.01827777491414718,
+                  "none": 0.1080827207178988
+                },
+                "margin": 0.7070314792867337,
+                "latency_ms": 164.21509999781847,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "person_down",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "supported",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "swift_latent_taylor_v1",
+              "candidate_frame_count": 11,
+              "selected_indices": [
+                0,
+                1,
+                5,
+                8
+              ],
+              "selected_source_pts_ms": [
+                0,
+                200,
+                1000,
+                1600
+              ],
+              "target_frames": 4,
+              "taylor_order": 3,
+              "latency_ms": 553.5325999953784,
+              "error": null
+            },
+            "timings_ms": {
+              "preprocess": 192.2838999889791,
+              "inference": 15358.73520001769,
+              "validation": 0.395099981687963,
+              "total": 15551.414699992165
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ],
+      "source_sha256": "ab959152c072d78c7ed745bc10c9f4f3f1026c0170e7f145d48916ce7cbae48b"
+    },
+    {
+      "source": "v001_converted 3.avi",
+      "session_id": "56e7a3e0-4872-4022-bd69-1ca96a08898a",
+      "replay_status": "completed",
+      "replay_error": null,
+      "sampled_frames": 33,
+      "events_created": 2,
+      "wall_time_ms": 28514.9,
+      "events": [
+        {
+          "event_id": "be7ba5dc-1b6b-4ae1-bc87-e7b5040ed2a2",
+          "category": "aggression_fight",
+          "candidate_key": "56e7a3e0-4872-4022-bd69-1ca96a08898a:aggression_fight:camera-window",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.593).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                0,
+                1,
+                3,
+                4,
+                6,
+                7,
+                9,
+                10
+              ],
+              "details": {
+                "top_category": "aggression_fight",
+                "class_scores": {
+                  "aggression_fight": 7.051737944285075,
+                  "person_down": 4.649626572926839,
+                  "crowd_gathering": 6.186389764149983,
+                  "none": 5.304831504821777
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.5932099005372053,
+                  "person_down": 0.05370128491141858,
+                  "crowd_gathering": 0.24968499916201167,
+                  "none": 0.10340381538936434
+                },
+                "margin": 0.34352490137519365,
+                "latency_ms": 176.87729999306612,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "aggression_fight",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "contradicted",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "swift_latent_taylor_v1",
+              "candidate_frame_count": 11,
+              "selected_indices": [
+                0,
+                1,
+                2,
+                7
+              ],
+              "selected_source_pts_ms": [
+                0,
+                200,
+                400,
+                1400
+              ],
+              "target_frames": 4,
+              "taylor_order": 3,
+              "latency_ms": 559.6940999967046,
+              "error": null
+            },
+            "timings_ms": {
+              "preprocess": 182.67429998377338,
+              "inference": 13189.442600007169,
+              "validation": 0.37399999564513564,
+              "total": 13372.491399990395
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        },
+        {
+          "event_id": "6b41b451-010a-4b4b-bbdc-bf3f7d7c505c",
+          "category": "crowd_gathering",
+          "candidate_key": "56e7a3e0-4872-4022-bd69-1ca96a08898a:crowd_gathering:default-zone",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible crowd gathering flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.403).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                10,
+                11,
+                13,
+                14,
+                16,
+                17,
+                19,
+                20
+              ],
+              "details": {
+                "top_category": "crowd_gathering",
+                "class_scores": {
+                  "aggression_fight": 2.9563749631245932,
+                  "person_down": 2.0262871583302817,
+                  "crowd_gathering": 3.526848077774048,
+                  "none": 3.1559178034464517
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.2280778722118852,
+                  "person_down": 0.08998106961867654,
+                  "crowd_gathering": 0.40349344009950555,
+                  "none": 0.2784476180699327
+                },
+                "margin": 0.12504582202957287,
+                "latency_ms": 202.45219999924302,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "crowd_gathering",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "supported",
+            "validation_notes": [
+              "Repeated local frame citations were collapsed for: duration_reached, people_in_zone, scene_visibility, threshold_reached."
+            ],
+            "error": null,
+            "selection": {
+              "strategy": "uniform_fallback",
+              "candidate_frame_count": 16,
+              "selected_indices": [
+                0,
+                5,
+                10,
+                15
+              ],
+              "selected_source_pts_ms": [
+                0,
+                1400,
+                2600,
+                4000
+              ],
+              "target_frames": 4,
+              "taylor_order": null,
+              "latency_ms": 0.030499999411404133,
+              "error": "ValueError: candidate timestamps are too irregular for Taylor sampling"
+            },
+            "timings_ms": {
+              "preprocess": 120.26690001948737,
+              "inference": 13215.856700000586,
+              "validation": 0.4175000067334622,
+              "total": 13336.54160000151
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ],
+      "source_sha256": "ae9704479dc7adb8b0273468b0495c7d4b11f3fb4697c0d8e2f81dedb6437c6d",
+      "duplicate_of": "8d00e66a-89d6-4ca2-96a6-f0b8315733a1.avi"
+    },
+    {
+      "source": "v003_converted 3.avi",
+      "session_id": "ec1214a4-d6af-4d34-99e9-7fc1299489c6",
+      "replay_status": "completed",
+      "replay_error": null,
+      "sampled_frames": 15,
+      "events_created": 1,
+      "wall_time_ms": 14467.5,
+      "events": [
+        {
+          "event_id": "9b9a4353-74d2-4a67-b2c1-4fb3a835a123",
+          "category": "aggression_fight",
+          "candidate_key": "ec1214a4-d6af-4d34-99e9-7fc1299489c6:aggression_fight:camera-window",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.585).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                0,
+                1,
+                3,
+                4,
+                6,
+                7,
+                9,
+                10
+              ],
+              "details": {
+                "top_category": "aggression_fight",
+                "class_scores": {
+                  "aggression_fight": 10.077166557312012,
+                  "person_down": 7.800364971160889,
+                  "crowd_gathering": 8.917651812235514,
+                  "none": 8.850536346435547
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.5849562976287617,
+                  "person_down": 0.06002346405641934,
+                  "crowd_gathering": 0.1834647212892234,
+                  "none": 0.17155551702559557
+                },
+                "margin": 0.40149157633953825,
+                "latency_ms": 152.95420002075844,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "aggression_fight",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "supported",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "swift_latent_taylor_v1",
+              "candidate_frame_count": 11,
+              "selected_indices": [
+                0,
+                1,
+                5,
+                7
+              ],
+              "selected_source_pts_ms": [
+                0,
+                200,
+                1000,
+                1400
+              ],
+              "target_frames": 4,
+              "taylor_order": 3,
+              "latency_ms": 437.4905999866314,
+              "error": null
+            },
+            "timings_ms": {
+              "preprocess": 157.29420000570826,
+              "inference": 12672.978200018406,
+              "validation": 0.38139999378472567,
+              "total": 12830.654400022468
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ],
+      "source_sha256": "6a6647689578e8e898d4a43840370aedf15fe636746dc43b11609b14449fa2ac"
+    },
+    {
+      "source": "v006_converted 3.avi",
+      "session_id": "19522805-47f0-4219-8550-c115db481327",
+      "replay_status": "completed",
+      "replay_error": null,
+      "sampled_frames": 30,
+      "events_created": 2,
+      "wall_time_ms": 35453.5,
+      "events": [
+        {
+          "event_id": "986debbb-6be8-417d-a878-cae384b48367",
+          "category": "aggression_fight",
+          "candidate_key": "19522805-47f0-4219-8550-c115db481327:aggression_fight:camera-window",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.701).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                0,
+                1,
+                3,
+                4,
+                6,
+                7,
+                9,
+                10
+              ],
+              "details": {
+                "top_category": "aggression_fight",
+                "class_scores": {
+                  "aggression_fight": 5.413137594858806,
+                  "person_down": 2.892524321873983,
+                  "crowd_gathering": 2.996844927469889,
+                  "none": 4.057149887084961
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.7005966496721668,
+                  "person_down": 0.056335171487792934,
+                  "crowd_gathering": 0.06252957602928703,
+                  "none": 0.18053860281075315
+                },
+                "margin": 0.5200580468614137,
+                "latency_ms": 148.6735999933444,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "aggression_fight",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "contradicted",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "swift_latent_taylor_v1",
+              "candidate_frame_count": 11,
+              "selected_indices": [
+                0,
+                1,
+                6,
+                9
+              ],
+              "selected_source_pts_ms": [
+                0,
+                200,
+                1200,
+                1800
+              ],
+              "target_frames": 4,
+              "taylor_order": 3,
+              "latency_ms": 467.2804999863729,
+              "error": null
+            },
+            "timings_ms": {
+              "preprocess": 185.88840001029894,
+              "inference": 18757.199100014986,
+              "validation": 0.5323999794200063,
+              "total": 18943.620500009274
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        },
+        {
+          "event_id": "5c863e14-0e2d-4f61-b9c9-33fa6fe8e4c8",
+          "category": "crowd_gathering",
+          "candidate_key": "19522805-47f0-4219-8550-c115db481327:crowd_gathering:default-zone",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "The configured number of tracked people remained inside the monitored zone.",
+          "candidate_model_id": "candidate://cpu-rules",
+          "candidate_model_revision": "candidate-v1",
+          "candidate_prompt_version": "none",
+          "candidate_observations": [
+            {
+              "predicate": "cpu_candidate_rule",
+              "supported": true,
+              "frame_indices": [
+                16
+              ]
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "crowd_gathering",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "supported",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "uniform_fallback",
+              "candidate_frame_count": 16,
+              "selected_indices": [
+                0,
+                5,
+                10,
+                15
+              ],
+              "selected_source_pts_ms": [
+                0,
+                1000,
+                2200,
+                3200
+              ],
+              "target_frames": 4,
+              "taylor_order": null,
+              "latency_ms": 0.03679998917505145,
+              "error": "ValueError: candidate timestamps are too irregular for Taylor sampling"
+            },
+            "timings_ms": {
+              "preprocess": 125.68900000769645,
+              "inference": 14759.633999987273,
+              "validation": 0.4566000134218484,
+              "total": 14885.780000011437
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ],
+      "source_sha256": "892eb11398ed80580f4047df23e5bb81bc31a497e69866fffcaecd592e9acee7"
+    },
+    {
+      "source": "v011_converted 3.avi",
+      "session_id": "a955ae47-5f31-4419-ba4e-d177f495bb81",
+      "replay_status": "completed",
+      "replay_error": null,
+      "sampled_frames": 44,
+      "events_created": 1,
+      "wall_time_ms": 16562.2,
+      "events": [
+        {
+          "event_id": "19faefae-1a3c-4219-b679-fec76f099410",
+          "category": "aggression_fight",
+          "candidate_key": "a955ae47-5f31-4419-ba4e-d177f495bb81:aggression_fight:camera-window",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible aggression fight flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.414).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                0,
+                1,
+                3,
+                4,
+                6,
+                7,
+                9,
+                10
+              ],
+              "details": {
+                "top_category": "aggression_fight",
+                "class_scores": {
+                  "aggression_fight": 5.066906611124675,
+                  "person_down": 4.338748137156169,
+                  "crowd_gathering": 3.816481431325277,
+                  "none": 4.63017209370931
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.4140232642835522,
+                  "person_down": 0.19988929578018672,
+                  "crowd_gathering": 0.11856922726982178,
+                  "none": 0.2675182126664393
+                },
+                "margin": 0.14650505161711286,
+                "latency_ms": 158.9860999956727,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "aggression_fight",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "supported",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "swift_latent_taylor_v1",
+              "candidate_frame_count": 11,
+              "selected_indices": [
+                0,
+                1,
+                2,
+                8
+              ],
+              "selected_source_pts_ms": [
+                0,
+                200,
+                400,
+                1600
+              ],
+              "target_frames": 4,
+              "taylor_order": 3,
+              "latency_ms": 500.3236000193283,
+              "error": null
+            },
+            "timings_ms": {
+              "preprocess": 223.73749999678694,
+              "inference": 14597.607800009428,
+              "validation": 0.4000999906565994,
+              "total": 14821.74600000144
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ],
+      "source_sha256": "0e18c25245ccacb01dc80fffa896c7ad15bd4a79138395b742a59c2e60252008"
+    },
+    {
+      "source": "v026_converted 3.avi",
+      "session_id": "a0f7c618-8e62-477b-b38c-a87a5584a200",
+      "replay_status": "completed",
+      "replay_error": null,
+      "sampled_frames": 49,
+      "events_created": 1,
+      "wall_time_ms": 17337.8,
+      "events": [
+        {
+          "event_id": "9daaab31-279b-4bbe-b926-d01ba1c314c1",
+          "category": "person_down",
+          "candidate_key": "a0f7c618-8e62-477b-b38c-a87a5584a200:person_down:camera-window",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible person down flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.815).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                0,
+                1,
+                3,
+                4,
+                6,
+                7,
+                9,
+                10
+              ],
+              "details": {
+                "top_category": "person_down",
+                "class_scores": {
+                  "aggression_fight": 6.585319836934407,
+                  "person_down": 9.219188849131266,
+                  "crowd_gathering": 5.421546459197998,
+                  "none": 7.198757489522298
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.05852530436332145,
+                  "person_down": 0.8151142000046325,
+                  "crowd_gathering": 0.01827777491414718,
+                  "none": 0.1080827207178988
+                },
+                "margin": 0.7070314792867337,
+                "latency_ms": 166.60710002179258,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "person_down",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "supported",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "swift_latent_taylor_v1",
+              "candidate_frame_count": 11,
+              "selected_indices": [
+                0,
+                1,
+                5,
+                8
+              ],
+              "selected_source_pts_ms": [
+                0,
+                200,
+                1000,
+                1600
+              ],
+              "target_frames": 4,
+              "taylor_order": 3,
+              "latency_ms": 545.9439000114799,
+              "error": null
+            },
+            "timings_ms": {
+              "preprocess": 190.55439997464418,
+              "inference": 15200.749500014354,
+              "validation": 0.37140000495128334,
+              "total": 15391.675799997756
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ],
+      "source_sha256": "ab959152c072d78c7ed745bc10c9f4f3f1026c0170e7f145d48916ce7cbae48b",
+      "duplicate_of": "ac3f4418-4c73-4a0c-b2cd-fcd23e5c769b.avi"
+    },
+    {
+      "source": "w001_converted 3.avi",
+      "session_id": "9ce6f436-fb76-4e2d-9bcd-ddbc29fabc1c",
+      "replay_status": "completed",
+      "replay_error": null,
+      "sampled_frames": 26,
+      "events_created": 1,
+      "wall_time_ms": 14846.9,
+      "events": [
+        {
+          "event_id": "affb0011-42e2-447e-96e7-daf838490748",
+          "category": "person_down",
+          "candidate_key": "9ce6f436-fb76-4e2d-9bcd-ddbc29fabc1c:person_down:camera-window",
+          "decision_state": "needs_review",
+          "lifecycle_state": "ended",
+          "summary": "Possible person down flagged by local zero-shot action ranking (uncalibrated; operator review required; normalized score 0.634).",
+          "candidate_model_id": "xclip://microsoft/xclip-base-patch32",
+          "candidate_model_revision": "a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+          "candidate_prompt_version": "cctv-actions-v1",
+          "candidate_observations": [
+            {
+              "predicate": "xclip_class_scores",
+              "supported": true,
+              "frame_indices": [
+                0,
+                1,
+                3,
+                4,
+                6,
+                7,
+                9,
+                10
+              ],
+              "details": {
+                "top_category": "person_down",
+                "class_scores": {
+                  "aggression_fight": 12.28774388631185,
+                  "person_down": 13.515837669372559,
+                  "crowd_gathering": 10.37288761138916,
+                  "none": 12.094290415445963
+                },
+                "normalized_scores": {
+                  "aggression_fight": 0.18566015427646618,
+                  "person_down": 0.6339763544962487,
+                  "crowd_gathering": 0.027359439324289102,
+                  "none": 0.1530040519029961
+                },
+                "margin": 0.44831620021978247,
+                "latency_ms": 191.8151999998372,
+                "calibrated": false
+              }
+            }
+          ],
+          "verification": {
+            "status": "completed",
+            "model_outcome": "person_down",
+            "error_code": null,
+            "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+            "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+            "prompt_version": "visual-verification-v3",
+            "verdict": "supported",
+            "validation_notes": [],
+            "error": null,
+            "selection": {
+              "strategy": "swift_latent_taylor_v1",
+              "candidate_frame_count": 11,
+              "selected_indices": [
+                1,
+                2,
+                5,
+                9
+              ],
+              "selected_source_pts_ms": [
+                200,
+                400,
+                1000,
+                1800
+              ],
+              "target_frames": 4,
+              "taylor_order": 3,
+              "latency_ms": 556.6773000173271,
+              "error": null
+            },
+            "timings_ms": {
+              "preprocess": 170.75439999462105,
+              "inference": 12770.093700004509,
+              "validation": 0.38610000046901405,
+              "total": 12941.234699974302
+            }
+          },
+          "media": [
+            {
+              "kind": "event_clip",
+              "status": "ready"
+            },
+            {
+              "kind": "keyframe",
+              "status": "ready"
+            }
+          ]
+        }
+      ],
+      "source_sha256": "f25c3f02c258ebe5ffc1082a61114f220f0b25171ba5194fea28b33d5294f719"
+    }
+  ],
+  "labels_are_verified_ground_truth": false,
+  "limitations": [
+    "Six clips are not a frozen labelled evaluation set.",
+    "Model predictions/verdicts are not accuracy measurements.",
+    "No held-out-camera or normal-footage performance is established."
+  ],
+  "status_before": {
+    "source": {
+      "kind": "file",
+      "mode": "local",
+      "health": "ready",
+      "fixture": false
+    },
+    "analysis": {
+      "mode": "cpu_detector+xclip_action",
+      "detector_ready": true,
+      "detector_weights": "yolo11n.pt",
+      "action_model_ready": true,
+      "action_model_id": "microsoft/xclip-base-patch32",
+      "degraded": false,
+      "message": "Local YOLO rules and XCLIP action ranking are available; action scores are uncalibrated and incidents require operator review.",
+      "vlm_connected": false,
+      "vlm": {
+        "state": "available",
+        "error": null,
+        "pending": 0,
+        "counters": {},
+        "model_id": null,
+        "model_revision": null,
+        "variant": "500m",
+        "selection_strategy": "swift",
+        "capacity": 3
+      }
+    },
+    "policy": "Visual evidence only; no access feed",
+    "timezone": "Asia/Kolkata",
+    "query": {
+      "enabled": true,
+      "state": "not_configured",
+      "model_id": null,
+      "embedding_model_id": null,
+      "device": "cpu",
+      "local_only": true
+    }
+  },
+  "resource_after": {
+    "measured_at": "2026-10-16T02:00:57.546104+00:00",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "total_mib": 6144,
+        "free_mib": 2279,
+        "used_mib": 3716,
+        "driver": "591.74",
+        "provisional_budget_mib": 1255
+      }
+    ],
+    "ram": {
+      "total_mib": 16236,
+      "available_mib": 3237,
+      "load_percent": 80
+    },
+    "torch_cuda": {
+      "free_mib": 3050.0,
+      "total_mib": 6143.5,
+      "allocated_mib": 1824.6,
+      "peak_allocated_mib": 1933.6
+    }
+  },
+  "status_after": {
+    "source": {
+      "kind": "file",
+      "mode": "local",
+      "health": "ready",
+      "fixture": false
+    },
+    "analysis": {
+      "mode": "cpu_detector+xclip_action",
+      "detector_ready": true,
+      "detector_weights": "yolo11n.pt",
+      "action_model_ready": true,
+      "action_model_id": "microsoft/xclip-base-patch32",
+      "degraded": false,
+      "message": "Local YOLO rules and XCLIP action ranking are available; action scores are uncalibrated and incidents require operator review.",
+      "vlm_connected": true,
+      "vlm": {
+        "state": "ready",
+        "error": null,
+        "pending": 0,
+        "capacity": 3,
+        "counters": {},
+        "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+        "model_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+        "selection_strategy": "swift",
+        "variant": "500m"
+      }
+    },
+    "policy": "Visual evidence only; no access feed",
+    "timezone": "Asia/Kolkata",
+    "query": {
+      "enabled": true,
+      "state": "not_configured",
+      "model_id": null,
+      "embedding_model_id": null,
+      "device": "cpu",
+      "local_only": true
+    }
+  },
+  "run_finished_utc": "2026-10-16T02:00:57.608846+00:00",
+  "unique_source_count": 6,
+  "duplicate_source_files": [
+    {
+      "source": "v001_converted 3.avi",
+      "duplicate_of": "8d00e66a-89d6-4ca2-96a6-f0b8315733a1.avi",
+      "sha256": "ae9704479dc7adb8b0273468b0495c7d4b11f3fb4697c0d8e2f81dedb6437c6d"
+    },
+    {
+      "source": "v026_converted 3.avi",
+      "duplicate_of": "ac3f4418-4c73-4a0c-b2cd-fcd23e5c769b.avi",
+      "sha256": "ab959152c072d78c7ed745bc10c9f4f3f1026c0170e7f145d48916ce7cbae48b"
+    }
+  ]
+}

@@ -3,7 +3,8 @@ import json
 import pytest
 
 from backend.inference.contracts import (
-    generation_schema, parse_candidate_observation, parse_observation, verification_verdict,
+    generation_schema, normalize_candidate_frame_citations, parse_candidate_observation,
+    parse_observation, verification_verdict,
 )
 from backend.inference.smolvlm import candidate_prompt
 
@@ -105,6 +106,43 @@ def test_candidate_parser_rejects_out_of_range_frame_without_repair():
     })
     with pytest.raises(ValueError, match="outside this request"):
         parse_candidate_observation(raw, 4, "aggression_fight")
+
+
+def test_candidate_citation_normalization_collapses_only_valid_local_duplicates():
+    crowd = {
+        "outcome": "crowd_gathering",
+        "summary": "Multiple people remain together.",
+        "evidence": {
+            "duration_reached": True,
+            "people_in_zone": True,
+            "scene_visibility": True,
+            "threshold_reached": True,
+        },
+        "evidence_frames": {
+            "duration_reached": [0, 0, 0],
+            "people_in_zone": [0, 0, 0],
+            "scene_visibility": [0, 0, 0],
+            "threshold_reached": [0, 0, 0],
+        },
+        "limitations": [],
+    }
+    raw = json.dumps(crowd)
+    normalized, notes = normalize_candidate_frame_citations(raw, 4)
+    observation = parse_candidate_observation(normalized, 4, "crowd_gathering")
+    assert notes == [
+        "Repeated local frame citations were collapsed for: duration_reached, "
+        "people_in_zone, scene_visibility, threshold_reached."
+    ]
+    assert all(item.frame_indices == [0] for item in observation.observations)
+    assert json.loads(raw)["evidence_frames"]["duration_reached"] == [0, 0, 0]
+
+    crowd["evidence_frames"]["duration_reached"] = [4, 4]
+    invalid_raw = json.dumps(crowd)
+    partially_normalized, invalid_notes = normalize_candidate_frame_citations(invalid_raw, 4)
+    assert json.loads(partially_normalized)["evidence_frames"]["duration_reached"] == [4, 4]
+    assert invalid_notes
+    with pytest.raises(ValueError, match="outside this request"):
+        parse_candidate_observation(partially_normalized, 4, "crowd_gathering")
 
 
 def test_candidate_prompt_uses_only_local_frame_indices():

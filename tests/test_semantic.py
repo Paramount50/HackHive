@@ -364,6 +364,7 @@ def test_store_attaches_supported_vlm_result_without_auto_accepting() -> None:
         "model_id": "fake-vlm",
         "model_revision": "test",
         "prompt_version": "test-v1",
+        "validation_notes": ["Repeated local frame citations were collapsed for: persistence."],
         "timings_ms": {"total": 12.5},
     })
 
@@ -387,9 +388,19 @@ def test_store_attaches_supported_vlm_result_without_auto_accepting() -> None:
     audit_payload = json.loads(window["observations_json"])
     assert audit_payload["observation"]["summary"].startswith("A visible person")
     assert audit_payload["raw_output"] == "{}"
+    assert audit_payload["validation_notes"] == [
+        "Repeated local frame citations were collapsed for: persistence."
+    ]
     projected = store.get_event(event_id)["verification"]
     assert projected["status"] == "completed"
     assert projected["verdict"] == "supported"
+    assert projected["validation_notes"] == [
+        "Repeated local frame citations were collapsed for: persistence."
+    ]
+    assert any(
+        limitation.startswith("VLM output normalization:")
+        for limitation in store.get_event(event_id)["limitations"]
+    )
 
 
 def test_semantic_states_upsert_one_visible_attempt() -> None:
