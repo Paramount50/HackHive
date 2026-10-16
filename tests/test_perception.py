@@ -32,10 +32,23 @@ def test_tailgating_requires_distinct_close_entries() -> None:
     assert result[0].category == CandidateCategory.SUSPECTED_TAILGATING
 
 
-def test_posture_persistence_resets_on_standing_missing_frame_and_long_gap():
+def test_posture_persistence_tolerates_a_short_missing_detection():
     rules = CandidateRules()
-    for middle in ([], [person(1000, "p1", horizontal=False)]):
-        assert not rules.evaluate([[person(0, "p1")], middle, [person(2000, "p1")]])
+    frames = [
+        [person(0, "p1")], [person(1000, "p1")], [], [person(2000, "p1")],
+    ]
+    result = rules.evaluate(frames)
+    person_down = next(item for item in result if item.category == CandidateCategory.PERSON_DOWN)
+    assert (person_down.start_pts_ms, person_down.trigger_pts_ms) == (0, 2000)
+
+
+def test_posture_persistence_resets_on_explicit_upright_observation_and_long_gap():
+    rules = CandidateRules()
+    assert not rules.evaluate([
+        [person(0, "p1")],
+        [person(1000, "p1", horizontal=False)],
+        [person(2000, "p1")],
+    ])
     assert not rules.evaluate([[person(0, "p1")], [person(5000, "p1")]])
 
 

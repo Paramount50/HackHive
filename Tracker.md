@@ -255,6 +255,14 @@ event. Verification: `python -m pytest -q` completed with 135 passed and one
 Starlette deprecation warning. This is orchestration evidence only; the newest
 2.2B Kaggle smoke and RTX 3060 co-residency measurements remain pending.
 
+Person-down gap handling — 2026-10-16: posture persistence now tolerates a
+short missing detection while retaining the last timestamped horizontal
+observation. An explicit upright observation resets the run immediately, and a
+later timestamp beyond `max_observation_gap_ms` expires it. Regression tests
+cover both the tolerated-miss and upright-reset paths. Verification:
+`python -m pytest -q` completed with 136 passed and one Starlette deprecation
+warning. This is deterministic rule coverage, not measured person-down recall.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

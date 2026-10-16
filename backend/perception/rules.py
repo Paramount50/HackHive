@@ -78,14 +78,37 @@ class CandidateRules:
     def _person_down(self, frames: list[list[Detection]]) -> list[Candidate]:
         by_track: dict[str, list[Detection]] = {}
         for frame in frames:
-            visible = {d.track_id for d in frame if d.class_name == "person" and d.horizontal_posture}
-            by_track = {track: observations for track, observations in by_track.items() if track in visible}
-            for detection in frame:
-                if detection.class_name == "person" and detection.horizontal_posture:
-                    previous = by_track.get(detection.track_id)
-                    if previous and detection.source_pts_ms - previous[-1].source_pts_ms > self.max_observation_gap_ms:
-                        del by_track[detection.track_id]
-                    by_track.setdefault(detection.track_id, []).append(detection)
+            if not frame:
+                # An empty detection frame has no timestamp in this boundary.
+                # Preserve runs until a later timestamped observation can
+                # distinguish a tolerated miss from a long gap.
+                continue
+            frame_pts_ms = frame[0].source_pts_ms
+            observed_people = {
+                detection.track_id: detection
+                for detection in frame
+                if detection.class_name == "person"
+            }
+            for track_id, observations in list(by_track.items()):
+                detection = observed_people.get(track_id)
+                if detection is not None and not detection.horizontal_posture:
+                    del by_track[track_id]
+                elif (
+                    detection is None
+                    and frame_pts_ms - observations[-1].source_pts_ms > self.max_observation_gap_ms
+                ):
+                    del by_track[track_id]
+            for detection in observed_people.values():
+                if not detection.horizontal_posture:
+                    continue
+                previous = by_track.get(detection.track_id)
+                if (
+                    previous
+                    and detection.source_pts_ms - previous[-1].source_pts_ms
+                    > self.max_observation_gap_ms
+                ):
+                    del by_track[detection.track_id]
+                by_track.setdefault(detection.track_id, []).append(detection)
         result = []
         for track_id, observations in by_track.items():
             if observations[-1].source_pts_ms - observations[0].source_pts_ms >= self.person_down_persistence_ms:
