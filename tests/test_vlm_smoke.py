@@ -3,7 +3,8 @@ import numpy as np
 import pytest
 
 from backend.inference.smolvlm import (
-    SmolVLMWorker, model_config, validate_provenance, vision_sampling_compatibility,
+    SmolVLMWorker, candidate_prompt, model_config, validate_provenance,
+    vision_sampling_compatibility,
 )
 from scripts.smoke_vlm import sample_window
 
@@ -72,3 +73,15 @@ def test_swift_sampling_requires_expected_vision_internals():
     compatible, error = vision_sampling_compatibility(object())
     assert compatible is False
     assert "AttributeError" in error
+
+
+def test_candidate_prompt_is_category_conditioned():
+    prompt = candidate_prompt("aggression_fight")
+    assert "physical_contact" in prompt
+    assert "intrusion_unauthorized_access" not in prompt
+    assert "Do not choose another category" in prompt
+
+
+def test_candidate_prompt_rejects_audit_outcomes():
+    with pytest.raises(ValueError, match="controlled incident"):
+        candidate_prompt("none")

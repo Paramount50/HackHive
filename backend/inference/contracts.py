@@ -129,10 +129,14 @@ def verification_verdict(observation: VisualObservation, expected_outcome: str) 
     return "supported"
 
 
-def generation_schema() -> dict:
+def generation_schema(candidate_outcome: str | None = None) -> dict:
     """Compact generation schema; semantic validation still runs afterward."""
     alternatives = []
-    for outcome, predicates in PREDICATES.items():
+    outcomes = [candidate_outcome] if candidate_outcome is not None else list(PREDICATES)
+    if candidate_outcome is not None and candidate_outcome not in PREDICATES:
+        raise ValueError("candidate outcome is not supported by the visual contract")
+    for outcome in outcomes:
+        predicates = PREDICATES[outcome]
         schema = VisualObservation.model_json_schema()
         schema["properties"]["outcome"] = {"type": "string", "enum": [outcome]}
         schema["properties"]["summary"]["maxLength"] = 160

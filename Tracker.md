@@ -207,6 +207,17 @@ intrusion. Verification: 15 focused contract/semantic tests passed; full-suite a
 frontend verification remain to be run. No accuracy improvement has been measured;
 the same fight-video windows still require a GPU rerun.
 
+Candidate-conditioned verification: integrated VLM verification now uses a
+category-specific prompt and single-category generation schema derived from the
+candidate already produced by rules/XCLIP/policy. The VLM cannot replace an
+aggression candidate with intrusion or another incident during verification.
+The generic multiclass path remains available for explicit low-rate audit smoke.
+Candidate smoke runs are supported with `--candidate`, and persisted verification
+payloads retain candidate category, raw output, validation diagnostics, EOS/token
+diagnostics, observations, and deterministic verdict. Fire/smoke and restricted
+intrusion still require documented upstream candidate/policy coverage; the same
+fight windows require a fresh candidate-mode GPU rerun.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

@@ -25,6 +25,9 @@ class SemanticJob:
 class VisualWorker(Protocol):
     def load(self) -> dict[str, Any]: ...
     def analyze(self, images: list[Image.Image], pts_ms: list[int]) -> dict[str, Any]: ...
+    def analyze_candidate(
+        self, images: list[Image.Image], pts_ms: list[int], candidate_category: str
+    ) -> dict[str, Any]: ...
 
 
 ResultHandler = Callable[[SemanticJob, dict[str, Any]], None]
@@ -167,7 +170,12 @@ class SemanticInferenceService:
             selected_images = [images[index] for index in selected_indices]
             selected_pts = [job.source_pts_ms[index] for index in selected_indices]
             selection_ms = (perf_counter() - selection_started) * 1000
-            result = self.worker.analyze(selected_images, selected_pts)
+            if hasattr(self.worker, "analyze_candidate"):
+                result = self.worker.analyze_candidate(
+                    selected_images, selected_pts, job.expected_outcome
+                )
+            else:
+                result = self.worker.analyze(selected_images, selected_pts)
             result["selection"] = {
                 "strategy": strategy,
                 "candidate_frame_count": len(images),

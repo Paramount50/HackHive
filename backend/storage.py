@@ -263,6 +263,13 @@ class Store:
             "expected_outcome": job.expected_outcome,
             "observation": observation.model_dump() if observation else None,
             "raw_output": str(result.get("raw_output", ""))[:8_000],
+            "error": result.get("error"),
+            "error_code": result.get("error_code"),
+            "validation_stage": result.get("validation_stage"),
+            "validation_error": result.get("validation_error"),
+            "hit_max_new_tokens": result.get("hit_max_new_tokens"),
+            "eos_reached": result.get("eos_reached"),
+            "candidate_category": result.get("candidate_category", job.expected_outcome),
             "selection": result.get("selection"),
         }
         status = "completed" if observation is not None else "failed"

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.inference.hardware import hardware_report
+from backend.inference.contracts import VisualObservation, verification_verdict
 from backend.inference.smolvlm import SmolVLMWorker, model_config
 
 
@@ -52,6 +53,10 @@ def main():
     parser.add_argument("--download", action="store_true", help="Explicit network setup; no inference")
     parser.add_argument("--hardware-only", action="store_true")
     parser.add_argument("--model", choices=("500m", "2.2b"), default="500m")
+    parser.add_argument("--candidate", choices=(
+        "person_down", "crowd_gathering", "suspected_tailgating",
+        "aggression_fight", "fire_smoke", "intrusion_unauthorized_access",
+    ))
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--videos", type=Path)
     parser.add_argument("--requests", type=int, default=20)
@@ -127,12 +132,21 @@ def main():
             fraction = spec["fraction"]
             try:
                 images, pts, indices = sample_window(path, fraction)
-                result = worker.analyze(images, pts)
+                if args.candidate:
+                    result = worker.analyze_candidate(images, pts, args.candidate)
+                else:
+                    result = worker.analyze(images, pts)
+                if result.get("observation") is not None and args.candidate:
+                    observation = VisualObservation.model_validate(result["observation"])
+                    result["verification_verdict"] = verification_verdict(
+                        observation, args.candidate
+                    )
                 result["source_frame_indices"] = indices
             except Exception as exc:
                 result = {"status": "failed", "error_code": "input_failed", "error": str(exc)}
-            result.update(request_index=index, warmup=warmup, source=path.name, mode="offline_smoke",
-                          model_variant=args.model)
+            result.update(request_index=index, warmup=warmup, source=path.name,
+                          mode="candidate_verification" if args.candidate else "offline_smoke",
+                          model_variant=args.model, candidate_category=args.candidate)
             stream.write(json.dumps(result) + "\n")
             stream.flush()
             if not warmup:
@@ -144,8 +158,10 @@ def main():
     outcomes = Counter(item["observation"]["outcome"] for item in results
                        if item.get("observation") is not None)
     timings = [item["timings_ms"]["total"] for item in results if "timings_ms" in item]
-    summary = {"mode": "offline_smoke", "variant": args.model, "model_id": config.model_id,
-               "revision": config.revision, "requested": args.requests, "attempted": len(results),
+    summary = {"mode": "candidate_verification" if args.candidate else "offline_smoke",
+               "variant": args.model, "model_id": config.model_id,
+               "revision": config.revision, "candidate_category": args.candidate,
+               "requested": args.requests, "attempted": len(results),
                "valid_outputs": valid, "failed_outputs": len(results)-valid,
                "valid_output_rate": valid/len(results) if results else None,
                "outcome_counts": dict(outcomes),

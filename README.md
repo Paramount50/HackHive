@@ -82,6 +82,19 @@ successful Kaggle/T4 runtime smoke promotes it; both variants remain selectable:
 .\.venv\Scripts\python.exe scripts\smoke_vlm.py --model 500m --videos ..\sample_videos --requests 20
 ```
 
+Candidate-conditioned verification uses a category-specific prompt and schema:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\smoke_vlm.py `
+  --model 2.2b --candidate aggression_fight `
+  --videos ..\sample_videos --requests 3
+```
+
+Without `--candidate`, the script remains an independent low-rate audit smoke
+using the controlled multiclass taxonomy. Candidate runs record the candidate,
+category-specific observations, deterministic verification verdict, raw output,
+timestamps, latency, and peak VRAM. This is not an accuracy evaluation.
+
 For a fair structural/performance comparison, create and reuse one deterministic
 window manifest:
 

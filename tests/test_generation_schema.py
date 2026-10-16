@@ -44,6 +44,13 @@ def test_generation_schema_does_not_claim_unenforced_array_uniqueness():
             assert "uniqueItems" not in observations
 
 
+def test_candidate_schema_is_fixed_to_the_expected_category():
+    alternatives = generation_schema("aggression_fight")["anyOf"]
+    assert len(alternatives) == 1
+    assert alternatives[0]["properties"]["outcome"]["enum"] == ["aggression_fight"]
+    assert "intrusion_unauthorized_access" not in str(alternatives[0])
+
+
 def test_duplicate_predicates_are_rejected_after_generation():
     duplicate = json.dumps({"outcome": "person_down", "summary": "A person.",
                             "observations": [
