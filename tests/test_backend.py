@@ -345,6 +345,7 @@ def test_replay_api_starts_background_job_and_rejects_path_escape(tmp_path, monk
     write_test_video(recordings / "entrance.avi")
     manager = ReplayManager(recordings, tmp_path / "assets")
     monkeypatch.setattr(main, "replay_manager", manager)
+    monkeypatch.setattr(main, "detector_weights", tmp_path / "missing-yolo.pt")
     monkeypatch.setattr(main, "get_action_classifier", lambda: None)
 
     with TestClient(main.app) as client:

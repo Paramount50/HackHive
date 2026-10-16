@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -33,16 +34,53 @@ PREDICATES = {
     },
     "none": set(), "unknown": set(),
 }
-REQUIRED_VISUAL_EVIDENCE = {
-    "person_down": {"visible_person", "prone_posture"},
-    "crowd_gathering": {"people_in_zone", "scene_visibility"},
-    "suspected_tailgating": {"same_direction_passages", "gate_visibility"},
-    "aggression_fight": {"multiple_people_visible", "physical_contact"},
-    "fire_smoke": {"scene_visibility"},
-    "intrusion_unauthorized_access": {"restricted_boundary_crossing", "scene_visibility"},
-}
-ALTERNATIVE_VISUAL_EVIDENCE = {
-    "fire_smoke": {"flame_like_region", "smoke_like_region"},
+
+@dataclass(frozen=True)
+class VerificationContract:
+    """Application-owned rules for interpreting category-conditioned evidence."""
+
+    required: frozenset[str]
+    alternatives: tuple[frozenset[str], ...] = ()
+    temporal: frozenset[str] = frozenset()
+    tracker_corroboration: frozenset[str] = frozenset()
+    ambiguity_context: frozenset[str] = frozenset()
+
+
+VERIFICATION_CONTRACTS = {
+    "person_down": VerificationContract(
+        required=frozenset({"visible_person", "prone_posture"}),
+        temporal=frozenset({"persistence"}),
+        ambiguity_context=frozenset({"usable_context"}),
+    ),
+    "crowd_gathering": VerificationContract(
+        required=frozenset({"people_in_zone", "scene_visibility"}),
+        # Exact count and duration remain tracker facts. These visual answers
+        # can prevent an automatic supported verdict, but cannot negate them.
+        tracker_corroboration=frozenset({"threshold_reached", "duration_reached"}),
+    ),
+    "suspected_tailgating": VerificationContract(
+        required=frozenset({
+            "distinct_people", "same_direction_passages", "temporal_proximity",
+            "gate_visibility",
+        }),
+    ),
+    "aggression_fight": VerificationContract(
+        required=frozenset({
+            "multiple_people_visible", "physical_contact", "aggressive_motion",
+        }),
+        temporal=frozenset({"temporal_persistence"}),
+    ),
+    "fire_smoke": VerificationContract(
+        required=frozenset({"scene_visibility"}),
+        alternatives=(frozenset({"flame_like_region", "smoke_like_region"}),),
+        temporal=frozenset({"temporal_persistence"}),
+    ),
+    "intrusion_unauthorized_access": VerificationContract(
+        required=frozenset({
+            "person_in_restricted_zone", "restricted_boundary_crossing", "scene_visibility",
+        }),
+        temporal=frozenset({"temporal_persistence"}),
+    ),
 }
 
 
@@ -107,7 +145,7 @@ def parse_candidate_observation(
     raw: str, frame_count: int, expected_outcome: str
 ) -> VisualObservation:
     """Parse the fixed per-predicate shape used by candidate verification."""
-    if expected_outcome not in REQUIRED_VISUAL_EVIDENCE:
+    if expected_outcome not in VERIFICATION_CONTRACTS:
         raise ValueError("expected outcome is not supported by visual verification")
     if len(raw) > 8_000:
         raise ValueError("model response is too long")
@@ -170,7 +208,7 @@ def parse_candidate_observation(
 
 def verification_verdict(observation: VisualObservation, expected_outcome: str) -> str:
     """Interpret a visual observation without converting it into incident truth."""
-    if expected_outcome not in REQUIRED_VISUAL_EVIDENCE:
+    if expected_outcome not in VERIFICATION_CONTRACTS:
         raise ValueError("expected outcome is not supported by visual verification")
     if observation.outcome == "unknown":
         return "inconclusive"
@@ -179,18 +217,39 @@ def verification_verdict(observation: VisualObservation, expected_outcome: str) 
     if observation.outcome != expected_outcome:
         return "category_conflict"
     evidence = {item.predicate: item.supported for item in observation.observations}
-    required = REQUIRED_VISUAL_EVIDENCE[expected_outcome]
+    contract = VERIFICATION_CONTRACTS[expected_outcome]
+    required = contract.required | contract.temporal
     if any(predicate in evidence and evidence[predicate] is False for predicate in required):
         return "contradicted"
     if any(predicate in evidence and evidence[predicate] is None for predicate in required):
         return "inconclusive"
     if any(predicate not in evidence for predicate in required):
         return "insufficient_evidence"
-    alternatives = ALTERNATIVE_VISUAL_EVIDENCE.get(expected_outcome)
-    if alternatives and not any(evidence.get(predicate) is True for predicate in alternatives):
-        if all(evidence.get(predicate) is False for predicate in alternatives):
+    for alternatives in contract.alternatives:
+        if any(evidence.get(predicate) is True for predicate in alternatives):
+            continue
+        if alternatives.issubset(evidence) and all(
+            evidence[predicate] is False for predicate in alternatives
+        ):
             return "contradicted"
+        if any(evidence.get(predicate) is None for predicate in alternatives if predicate in evidence):
+            return "inconclusive"
         return "insufficient_evidence"
+    # Visual estimates cannot replace exact tracker counts or durations. A
+    # disagreement blocks support and remains visible for human review.
+    if any(predicate not in evidence for predicate in contract.tracker_corroboration):
+        return "insufficient_evidence"
+    if any(evidence[predicate] is not True for predicate in contract.tracker_corroboration):
+        return "inconclusive"
+    # Context fields explain whether the primary evidence can be interpreted.
+    # Their absence is non-decision evidence for legacy outputs; an explicit
+    # false or unknown answer prevents a supported verdict.
+    if any(
+        evidence[predicate] is not True
+        for predicate in contract.ambiguity_context
+        if predicate in evidence
+    ):
+        return "inconclusive"
     return "supported"
 
 

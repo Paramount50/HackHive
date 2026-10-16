@@ -222,12 +222,17 @@ Candidate evidence completeness follow-up — 2026-10-16: candidate mode now
 requires explicit true/false/null evidence and frame citations for every
 category predicate. For aggression this is
 `multiple_people_visible`, `physical_contact`, `aggressive_motion`, and
-`temporal_persistence`; the deterministic `supported` verdict still requires
-the first two to be true. Generic audit mode retains the optional observations
-list. Out-of-range frame references remain invalid and are never repaired. The
-checked-in workspace has earlier generic smoke reports but not the newer Kaggle
-candidate report, so the exact invalid generated index remains pending from
-that raw report.
+`temporal_persistence`; the deterministic `supported` verdict now requires all
+four to be true. Person-down requires visible person, prone posture and
+persistence. Fire/smoke requires scene visibility, temporal persistence and at
+least one of flame-like or smoke-like evidence. Crowd count/duration remain
+tracker facts; a VLM disagreement blocks support without replacing those facts.
+Authorization remains outside the visual contract. Regression tests cover
+true/false/null decision evidence across all six schemas. Generic audit mode
+retains the optional observations list. Out-of-range frame references remain
+invalid and are never repaired. Verification: `python -m pytest -q` completed
+with 134 passed and one Starlette deprecation warning. GPU behavior was not
+exercised; the newest Kaggle candidate run remains pending.
 
 Candidate frame-reference follow-up — 2026-10-16: candidate prompts no longer
 expose source PTS values to SmolVLM; they label images only as local frame

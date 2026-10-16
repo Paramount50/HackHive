@@ -2,6 +2,7 @@ import json
 from threading import Event
 from time import monotonic, sleep
 
+import pytest
 from PIL import Image
 
 from backend.contracts import FixtureAnalysis
@@ -17,6 +18,8 @@ def supported_observation() -> dict:
         "observations": [
             {"predicate": "visible_person", "supported": True, "frame_indices": [0, 3]},
             {"predicate": "prone_posture", "supported": True, "frame_indices": [1, 2, 3]},
+            {"predicate": "persistence", "supported": True, "frame_indices": [0, 1, 2, 3]},
+            {"predicate": "usable_context", "supported": True, "frame_indices": [0, 3]},
         ],
         "limitations": ["Operator review is required."],
     }
@@ -88,69 +91,104 @@ def test_person_down_with_empty_evidence_is_not_supported() -> None:
     assert verification_verdict(observation, "person_down") == "insufficient_evidence"
 
 
-def test_expanded_visual_categories_require_primary_evidence() -> None:
-    aggression = VisualObservation.model_validate({
-        "outcome": "aggression_fight",
-        "summary": "Two people visibly make physical contact.",
-        "observations": [
-            {"predicate": "multiple_people_visible", "supported": True, "frame_indices": [0]},
-            {"predicate": "physical_contact", "supported": True, "frame_indices": [1]},
-        ],
-        "limitations": [],
-    })
-    assert verification_verdict(aggression, "aggression_fight") == "supported"
-    assert verification_verdict(VisualObservation.model_validate({
-        "outcome": "aggression_fight",
-        "summary": aggression.summary,
-        "observations": [
-            {"predicate": "multiple_people_visible", "supported": True, "frame_indices": [0]},
-            {"predicate": "physical_contact", "supported": False, "frame_indices": [1]},
-        ],
-        "limitations": [],
-    }),
-        "aggression_fight",
-    ) == "contradicted"
+DECISION_EVIDENCE = {
+    "person_down": ["visible_person", "prone_posture", "persistence", "usable_context"],
+    "crowd_gathering": [
+        "people_in_zone", "threshold_reached", "duration_reached", "scene_visibility",
+    ],
+    "suspected_tailgating": [
+        "distinct_people", "same_direction_passages", "temporal_proximity", "gate_visibility",
+    ],
+    "aggression_fight": [
+        "multiple_people_visible", "physical_contact", "aggressive_motion", "temporal_persistence",
+    ],
+    "fire_smoke": [
+        "flame_like_region", "smoke_like_region", "temporal_persistence", "scene_visibility",
+    ],
+    "intrusion_unauthorized_access": [
+        "person_in_restricted_zone", "restricted_boundary_crossing",
+        "scene_visibility", "temporal_persistence",
+    ],
+}
 
-    fire = VisualObservation.model_validate({
-        "outcome": "fire_smoke",
-        "summary": "Smoke-like evidence is visible.",
-        "observations": [
-            {"predicate": "smoke_like_region", "supported": True, "frame_indices": [0]},
-            {"predicate": "scene_visibility", "supported": True, "frame_indices": [0]},
-        ],
-        "limitations": [],
-    })
-    assert verification_verdict(fire, "fire_smoke") == "supported"
-    assert verification_verdict(VisualObservation.model_validate({
-        "outcome": "fire_smoke",
-        "summary": fire.summary,
-        "observations": [
-            {"predicate": "scene_visibility", "supported": True, "frame_indices": [0]},
-        ],
-        "limitations": [],
-    }),
-        "fire_smoke",
-    ) == "insufficient_evidence"
-    assert verification_verdict(VisualObservation.model_validate({
-        "outcome": "fire_smoke",
-        "summary": "No flame is visible, but smoke evidence is unclear.",
-        "observations": [
-            {"predicate": "flame_like_region", "supported": False, "frame_indices": [0]},
-            {"predicate": "scene_visibility", "supported": True, "frame_indices": [0]},
-        ],
-        "limitations": [],
-    }), "fire_smoke") == "insufficient_evidence"
 
-    intrusion = VisualObservation.model_validate({
-        "outcome": "intrusion_unauthorized_access",
-        "summary": "A person crosses a visible restricted boundary.",
+def category_observation(outcome: str, **answers: bool | None) -> VisualObservation:
+    values = {predicate: True for predicate in DECISION_EVIDENCE[outcome]}
+    values.update(answers)
+    return VisualObservation.model_validate({
+        "outcome": outcome,
+        "summary": "Category-conditioned visual evidence.",
         "observations": [
-            {"predicate": "restricted_boundary_crossing", "supported": True, "frame_indices": [1]},
-            {"predicate": "scene_visibility", "supported": True, "frame_indices": [1]},
+            {"predicate": predicate, "supported": supported, "frame_indices": [0, 1]}
+            for predicate, supported in values.items()
         ],
-        "limitations": ["Authorization requires external policy evidence."],
+        "limitations": [],
     })
-    assert verification_verdict(intrusion, "intrusion_unauthorized_access") == "supported"
+
+
+@pytest.mark.parametrize("outcome", DECISION_EVIDENCE)
+def test_each_category_requires_a_complete_positive_decision_contract(outcome: str) -> None:
+    assert verification_verdict(category_observation(outcome), outcome) == "supported"
+
+
+@pytest.mark.parametrize("outcome,predicate", [
+    ("person_down", "visible_person"),
+    ("person_down", "prone_posture"),
+    ("person_down", "persistence"),
+    ("crowd_gathering", "people_in_zone"),
+    ("crowd_gathering", "scene_visibility"),
+    ("suspected_tailgating", "distinct_people"),
+    ("suspected_tailgating", "same_direction_passages"),
+    ("suspected_tailgating", "temporal_proximity"),
+    ("suspected_tailgating", "gate_visibility"),
+    ("aggression_fight", "multiple_people_visible"),
+    ("aggression_fight", "physical_contact"),
+    ("aggression_fight", "aggressive_motion"),
+    ("aggression_fight", "temporal_persistence"),
+    ("fire_smoke", "scene_visibility"),
+    ("fire_smoke", "temporal_persistence"),
+    ("intrusion_unauthorized_access", "person_in_restricted_zone"),
+    ("intrusion_unauthorized_access", "restricted_boundary_crossing"),
+    ("intrusion_unauthorized_access", "scene_visibility"),
+    ("intrusion_unauthorized_access", "temporal_persistence"),
+])
+def test_false_or_null_required_evidence_cannot_support(
+    outcome: str, predicate: str
+) -> None:
+    assert verification_verdict(category_observation(outcome, **{predicate: False}), outcome) == "contradicted"
+    assert verification_verdict(category_observation(outcome, **{predicate: None}), outcome) == "inconclusive"
+
+
+@pytest.mark.parametrize("predicate", ["threshold_reached", "duration_reached"])
+def test_crowd_visual_disagreement_does_not_override_tracker_facts(predicate: str) -> None:
+    assert verification_verdict(
+        category_observation("crowd_gathering", **{predicate: False}), "crowd_gathering"
+    ) == "inconclusive"
+    assert verification_verdict(
+        category_observation("crowd_gathering", **{predicate: None}), "crowd_gathering"
+    ) == "inconclusive"
+
+
+def test_person_down_unusable_or_unknown_context_is_inconclusive() -> None:
+    for answer in (False, None):
+        assert verification_verdict(
+            category_observation("person_down", usable_context=answer), "person_down"
+        ) == "inconclusive"
+
+
+def test_fire_accepts_fire_or_smoke_but_not_absence_or_ambiguity_of_both() -> None:
+    assert verification_verdict(category_observation(
+        "fire_smoke", flame_like_region=True, smoke_like_region=False
+    ), "fire_smoke") == "supported"
+    assert verification_verdict(category_observation(
+        "fire_smoke", flame_like_region=False, smoke_like_region=True
+    ), "fire_smoke") == "supported"
+    assert verification_verdict(category_observation(
+        "fire_smoke", flame_like_region=False, smoke_like_region=False
+    ), "fire_smoke") == "contradicted"
+    assert verification_verdict(category_observation(
+        "fire_smoke", flame_like_region=False, smoke_like_region=None
+    ), "fire_smoke") == "inconclusive"
 
 
 def test_none_and_unknown_remain_distinct_for_expanded_contract() -> None:
