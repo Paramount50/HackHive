@@ -250,7 +250,22 @@ class EventOrchestrator:
         if len(selected) != 8:
             return None
         self.last_action_frame_indices = [frame.frame_id for frame in selected]
-        result = self.action_classifier.classify([frame.asset_id for frame in selected])
+        try:
+            result = self.action_classifier.classify([frame.asset_id for frame in selected])
+        except Exception as exc:
+            self.store.record_analysis_failure(
+                self.session_id,
+                self.session_started_utc_ms + selected[0].source_pts_ms,
+                self.session_started_utc_ms + selected[-1].source_pts_ms,
+                reason="xclip_action",
+                model_id="xclip://microsoft/xclip-base-patch32",
+                model_revision="a2e27a78a2b5d802e894b8a1ef14f3a8ce490963",
+                prompt_version="cctv-actions-v1",
+                error_code="action_inference_failed",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            self.last_action_pts_ms = packet.source_pts_ms
+            return None
         self.last_action_pts_ms = packet.source_pts_ms
         return result
 

@@ -329,6 +329,14 @@ result. Raw artifacts are in `reports/vlm-20261016T011647Z`,
 rerun and RTX 3060 2.2B+XCLIP co-residency measurement remain pending because
 the local checkout contains only the 500M model.
 
+Audit regression follow-up — 2026-10-16: application-owned count/group queries
+no longer rewrite to a 100-row list, and aggregate storage reads are not capped;
+a 101-event regression test verifies the exact count. XCLIP sliding windows now
+reuse the active follow-up occurrence after the original event ends instead of
+creating one event per stride. XCLIP runtime exceptions persist a failed
+analysis window while CPU candidates continue through the same replay.
+Verification: `python -m pytest -q` completed with 143 passed and two warnings.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

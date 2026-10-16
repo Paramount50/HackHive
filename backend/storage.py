@@ -246,11 +246,21 @@ class Store:
             (candidate_key,),
         ).fetchone()
         if existing and existing["lifecycle_state"] == "ended":
-            candidate_key = f"{candidate_key}:{start_utc_ms}"
+            base_candidate_key = candidate_key
             existing = self.connection.execute(
-                "SELECT event_id,lifecycle_state,window_ids_json FROM events WHERE candidate_key=?",
-                (candidate_key,),
+                """SELECT event_id,lifecycle_state,window_ids_json,candidate_key FROM events
+                   WHERE lifecycle_state='active' AND candidate_key LIKE ?
+                   ORDER BY created_utc_ms DESC LIMIT 1""",
+                (f"{base_candidate_key}:%",),
             ).fetchone()
+            if existing is not None:
+                candidate_key = existing["candidate_key"]
+            else:
+                candidate_key = f"{base_candidate_key}:{start_utc_ms}"
+                existing = self.connection.execute(
+                    "SELECT event_id,lifecycle_state,window_ids_json FROM events WHERE candidate_key=?",
+                    (candidate_key,),
+                ).fetchone()
         if existing:
             window_ids = json.loads(existing["window_ids_json"])
             if window_id not in window_ids:
@@ -422,6 +432,34 @@ class Store:
                 [*updates.values(), job.event_id],
             )
         return verdict or status
+
+    def record_analysis_failure(
+        self,
+        session_id: str,
+        start_utc_ms: int,
+        end_utc_ms: int,
+        *,
+        reason: str,
+        model_id: str,
+        model_revision: str,
+        prompt_version: str,
+        error_code: str,
+        error: str,
+    ) -> str:
+        window_id = str(uuid.uuid4())
+        self.connection.execute(
+            """INSERT INTO analysis_windows
+            (window_id,session_id,start_utc_ms,end_utc_ms,frame_count,reason,status,
+             model_id,model_revision,prompt_version,observations_json,timings_json,error_code)
+            VALUES (?,?,?,?,0,?,'failed',?,?,?,?,?,?)""",
+            (
+                window_id, session_id, start_utc_ms, end_utc_ms, reason,
+                model_id, model_revision, prompt_version,
+                json.dumps({"error": error[:1000]}), "{}", error_code,
+            ),
+        )
+        self.connection.commit()
+        return window_id
 
     def close_inactive_events(
         self, observed_utc_ms: int, merge_gap_ms: int = 5_000, session_id: str | None = None
@@ -727,8 +765,10 @@ class Store:
         if intent.end_utc_ms is not None:
             sql += " AND e.start_utc_ms < ?"
             params.append(intent.end_utc_ms)
-        sql += " ORDER BY e.start_utc_ms DESC LIMIT ?"
-        params.append(intent.limit if intent.operation == "list" else 10000)
+        sql += " ORDER BY e.start_utc_ms DESC"
+        if intent.operation == "list":
+            sql += " LIMIT ?"
+            params.append(intent.limit)
         result = []
         for row in self.connection.execute(sql, params).fetchall():
             review, reviews = self._review_projection(row["event_id"])

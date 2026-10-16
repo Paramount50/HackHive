@@ -186,6 +186,24 @@ def test_visual_intrusion_candidate_keeps_authorization_unknown() -> None:
     assert event["access_evidence_source"] is None
 
 
+def test_sliding_xclip_windows_reuse_the_active_followup_occurrence() -> None:
+    store = make_store()
+    session_id = store.create_session(1_000)
+    candidate = FixtureAnalysis(
+        outcome="aggression_fight", summary="XCLIP candidate.",
+        model_id="xclip://microsoft/xclip-base-patch32",
+        observations=[{"predicate": "xclip_class_scores", "supported": True}],
+    )
+    base_key = "session:aggression_fight:camera-window"
+    first = store.record_analysis(session_id, 2_000, 3_000, candidate, base_key)
+    store.close_inactive_events(10_000, merge_gap_ms=0, session_id=session_id)
+    second = store.record_analysis(session_id, 20_000, 21_000, candidate, base_key)
+    third = store.record_analysis(session_id, 21_000, 22_000, candidate, base_key)
+    assert first != second
+    assert third == second
+    assert len(store.list_events(QueryIntent())) == 2
+
+
 def test_api_fixture_and_citations() -> None:
     from backend import main
 

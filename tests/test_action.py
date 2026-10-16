@@ -10,7 +10,7 @@ from backend.inference.service import SemanticInferenceService
 from backend.media import MediaExporter
 from backend.orchestrator import EventOrchestrator
 from backend.perception.action import ActionClassification, PROMPTS, classify_logits
-from backend.perception.pipeline import PerceptionPipeline
+from backend.perception.pipeline import BoxDetection, PerceptionPipeline
 from backend.storage import Store
 
 
@@ -57,6 +57,11 @@ class FixedActionClassifier:
             {"aggression_fight": 3.0, "person_down": 0.0, "crowd_gathering": 0.0, "none": 0.0},
             0.60,
         )
+
+
+class FailingActionClassifier:
+    def classify(self, image_paths):
+        raise RuntimeError("fixture model failure")
 
 
 class SupportedAggressionWorker:
@@ -245,3 +250,41 @@ def test_unknown_action_windows_are_logged_without_creating_incidents(tmp_path: 
     assert len(windows) == len(classifier.calls) == 1
     assert windows[0]["model_outcome"] == "unknown"
     assert "class_scores" in windows[0]["observations_json"]
+
+
+def test_xclip_failure_is_recorded_without_stopping_cpu_candidates(tmp_path: Path) -> None:
+    class HorizontalDetector:
+        def detect(self, image_path):
+            return [BoxDetection(5, 15, 55, 35, 0.9, "person")]
+
+    store = Store()
+    make_session(store, "action-failure-session", 60_000)
+    packets = []
+    for index in range(11):
+        path = tmp_path / f"action-failure-{index}.jpg"
+        assert cv2.imwrite(str(path), np.full((48, 64, 3), index * 10, dtype=np.uint8))
+        pts = index * 200
+        packets.append(FramePacket(
+            "cam-1", "action-failure-session", index, pts, 60_000 + pts,
+            64, 48, str(path), False,
+        ))
+    orchestrator = EventOrchestrator(
+        session_id="action-failure-session", session_started_utc_ms=60_000,
+        pipeline=PerceptionPipeline(HorizontalDetector()), store=store,
+        media=MediaExporter(tmp_path / "action-failure-media"),
+        action_classifier=FailingActionClassifier(),
+    )
+    touched = []
+    for packet in packets:
+        touched.extend(orchestrator.process(packet))
+
+    assert touched
+    assert store.get_event(touched[-1])["category"] == "person_down"
+    failure = store.connection.execute(
+        """SELECT status,error_code,observations_json FROM analysis_windows
+           WHERE session_id=? AND reason='xclip_action'""",
+        ("action-failure-session",),
+    ).fetchone()
+    assert failure["status"] == "failed"
+    assert failure["error_code"] == "action_inference_failed"
+    assert "fixture model failure" in failure["observations_json"]

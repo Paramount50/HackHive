@@ -204,9 +204,7 @@ class HybridQueryEngine:
         else:
             plan = build_query_plan(request, self.text_model)
             timezone_name = request.timezone
-        candidate_intent = plan.intent.model_copy(
-            update={"operation": "list", "group_by": None, "limit": 100}
-        )
+        candidate_intent = plan.intent.model_copy(update={"limit": 100})
         candidates = self.store.list_events(candidate_intent)
         retrieval_mode = plan.retrieval_mode
         semantic_scores: dict[str, float] = {}

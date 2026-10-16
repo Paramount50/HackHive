@@ -7,12 +7,28 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.chat import HybridQueryEngine, ModelRoutingDecision, SemanticRanker
-from backend.contracts import FixtureAnalysis, NaturalQueryRequest
+from backend.contracts import FixtureAnalysis, NaturalQueryRequest, QueryIntent
 from backend.query import QueryClarification
 from backend.storage import Store
 
 
 NOW = int(datetime(2026, 10, 15, 4, 0, tzinfo=timezone.utc).timestamp() * 1000)
+
+
+def test_count_is_not_truncated_by_list_retrieval_limit() -> None:
+    store = Store()
+    session = store.create_session(NOW - 100_000)
+    for index in range(101):
+        store.record_analysis(
+            session, NOW - 90_000 + index, NOW - 80_000 + index,
+            FixtureAnalysis(
+                outcome="person_down", summary=f"Recorded candidate {index}.",
+                observations=[{"predicate": "visible_person", "supported": True}],
+            ),
+            f"aggregate-{index}",
+        )
+    result = HybridQueryEngine(store).execute(QueryIntent(operation="count", limit=1))
+    assert result["answer"] == "101 matching recorded incidents."
 
 
 class KeywordEmbedder:
