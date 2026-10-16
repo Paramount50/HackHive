@@ -392,6 +392,18 @@ Documentation verification after the meeting update: all twelve Markdown files e
 
 ## Implementation backlog
 
+## Next implementation order
+
+The next two milestones are now explicitly ordered:
+
+1. Crowd counting with deterministic temporal fixtures, persisted count/threshold
+   evidence, API exposure, and dashboard display.
+2. Visual bounding boxes in displayed video, using the same timestamped
+   detection/track records and a validated source-pixel overlay contract.
+
+Bounding-box work depends on the crowd-counting contract and fixture coverage.
+Neither milestone may claim detector accuracy without labeled footage.
+
 | ID | Owner | Priority | Task | Depends on | Status | Acceptance evidence to attach |
 |---|---|---|---|---|---|---|
 | T01 | A | P0 | Hardware budget and local four-frame smoke test | — | IN_PROGRESS | GPU is available; 20-request smoke returned 18 valid JSON outputs, all `unknown`; no quality result |
