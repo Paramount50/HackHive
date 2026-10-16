@@ -183,7 +183,7 @@ class EventOrchestrator:
     def _submit_semantic_verification(
         self, event_id: str, candidate: Candidate, candidate_key: str
     ) -> None:
-        if self.semantic_submit is None or event_id in self.semantic_submitted_events:
+        if event_id in self.semantic_submitted_events:
             return
         if str(candidate.category) not in {
             "person_down", "crowd_gathering", "suspected_tailgating", "aggression_fight"
@@ -193,22 +193,39 @@ class EventOrchestrator:
             frame for frame in self.frames
             if max(0, candidate.start_pts_ms - 2_000) <= frame.source_pts_ms <= candidate.trigger_pts_ms
         ]
-        if len(available) < 4:
-            return
         if len(available) > self.semantic_pool_frames:
             pool_indices = [
                 round(index * (len(available) - 1) / (self.semantic_pool_frames - 1))
                 for index in range(self.semantic_pool_frames)
             ]
             available = [available[index] for index in pool_indices]
+        source_pts_ms = tuple(frame.source_pts_ms for frame in available)
+        if not source_pts_ms:
+            source_pts_ms = (candidate.start_pts_ms, candidate.trigger_pts_ms)
         job = SemanticJob(
             event_id=event_id,
             camera_id=available[-1].camera_id,
             candidate_key=candidate_key,
             expected_outcome=str(candidate.category),
             image_paths=tuple(frame.asset_id for frame in available),
-            source_pts_ms=tuple(frame.source_pts_ms for frame in available),
+            source_pts_ms=source_pts_ms,
         )
+        if self.semantic_submit is None:
+            self.store.record_vlm_result(job, {
+                "status": "not_configured",
+                "error_code": "vlm_not_configured",
+                "error": "No local VLM service is configured.",
+            })
+            self.semantic_submitted_events.add(event_id)
+            return
+        if len(available) < 4:
+            self.store.record_vlm_result(job, {
+                "status": "rejected",
+                "error_code": "insufficient_candidate_frames",
+                "error": "At least four candidate frames are required.",
+            })
+            self.semantic_submitted_events.add(event_id)
+            return
         if self.semantic_submit(job):
             self.semantic_submitted_events.add(event_id)
 

@@ -43,6 +43,7 @@ class BoundedScheduler:
             raise ValueError("max_pending must be positive")
         self.max_pending = max_pending
         self._pending: deque[InferenceRequest] = deque()
+        self._terminal: deque[InferenceRequest] = deque()
         self._lock = Lock()
         self._worker_lock = Lock()
         self._candidate_streak = 0
@@ -65,6 +66,7 @@ class BoundedScheduler:
                 if same_candidate or request.reason == old.reason == RequestReason.AUDIT:
                     self._pending.remove(old)
                     old.status, old.error = RequestStatus.SUPERSEDED, "coalesced_by_newer_request"
+                    self._terminal.append(old)
                     self.counters["superseded"] += 1
                     break
             if len(self._pending) >= self.max_pending:
@@ -80,6 +82,7 @@ class BoundedScheduler:
 
     def _reject(self, request: InferenceRequest, reason: str) -> None:
         request.status, request.error = RequestStatus.EXPIRED, reason
+        self._terminal.append(request)
         self.counters[f"{request.reason}:{reason}"] += 1
 
     def _expire(self, current: float) -> None:
@@ -106,6 +109,24 @@ class BoundedScheduler:
             self._pending.remove(selected)
             self._candidate_streak = self._candidate_streak + 1 if selected.reason == RequestReason.CANDIDATE else 0
             return selected
+
+    def take_terminal(self) -> list[InferenceRequest]:
+        """Return queued requests that ended before reaching the worker."""
+        with self._lock:
+            terminal = list(self._terminal)
+            self._terminal.clear()
+            return terminal
+
+    def fail_pending(self, reason: str) -> list[InferenceRequest]:
+        """Fail all waiting requests when the worker cannot become available."""
+        with self._lock:
+            failed = list(self._pending)
+            self._pending.clear()
+            for request in failed:
+                request.status = RequestStatus.FAILED
+                request.error = reason
+                self.counters[f"{request.reason}:{reason}"] += 1
+            return failed
 
     def run_next(
         self,

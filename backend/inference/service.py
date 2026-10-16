@@ -20,6 +20,7 @@ class SemanticJob:
     expected_outcome: str
     image_paths: tuple[str, ...]
     source_pts_ms: tuple[int, ...]
+    verification_id: str = ""
 
 
 class VisualWorker(Protocol):
@@ -44,6 +45,7 @@ class SemanticInferenceService:
         max_pending: int = 3,
         deadline_seconds: float = 20.0,
         selection_strategy: str = "swift",
+        on_state: ResultHandler | None = None,
     ) -> None:
         if deadline_seconds <= 0:
             raise ValueError("deadline_seconds must be positive")
@@ -51,6 +53,7 @@ class SemanticInferenceService:
             raise ValueError("selection_strategy must be swift or uniform")
         self.worker = worker
         self.on_result = on_result
+        self.on_state = on_state
         self.scheduler = BoundedScheduler(max_pending=max_pending)
         self.deadline_seconds = deadline_seconds
         self.selection_strategy = selection_strategy
@@ -75,7 +78,18 @@ class SemanticInferenceService:
             right <= left for left, right in zip(job.source_pts_ms, job.source_pts_ms[1:])
         ):
             raise ValueError("semantic job requires at least four distinct chronological frames")
+        if not job.verification_id:
+            job = SemanticJob(
+                event_id=job.event_id,
+                camera_id=job.camera_id,
+                candidate_key=job.candidate_key,
+                expected_outcome=job.expected_outcome,
+                image_paths=job.image_paths,
+                source_pts_ms=job.source_pts_ms,
+                verification_id=str(uuid.uuid4()),
+            )
         if self.state == "failed":
+            self._emit_state(job, "failed", "model_unavailable", self.error)
             return False
         request_id = str(uuid.uuid4())
         request = InferenceRequest(
@@ -89,10 +103,10 @@ class SemanticInferenceService:
         with self._jobs_lock:
             self._jobs[request_id] = job
         admitted = self.scheduler.submit(request)
+        self._report_terminal_requests()
         if not admitted:
-            with self._jobs_lock:
-                self._jobs.pop(request_id, None)
             return False
+        self._emit_state(job, "pending")
         self._wake.set()
         return True
 
@@ -119,10 +133,13 @@ class SemanticInferenceService:
         except Exception as exc:
             self.state = "failed"
             self.error = f"{type(exc).__name__}: {exc}"[:500]
+            for request in self.scheduler.fail_pending("model_load_failed"):
+                self._report_terminal(request, status="failed")
             return
         self.state = "ready"
         while not self._stop.is_set():
             request = self.scheduler.run_next(self._handle)
+            self._report_terminal_requests()
             if request is None:
                 self._wake.wait(0.5)
                 self._wake.clear()
@@ -134,6 +151,7 @@ class SemanticInferenceService:
             request.status = RequestStatus.FAILED
             request.error = "semantic_job_missing"
             return
+        self._emit_state(job, "running")
         images: list[Image.Image] = []
         try:
             for path in job.image_paths:
@@ -201,3 +219,33 @@ class SemanticInferenceService:
                 "source_pts_ms": list(job.source_pts_ms),
                 "timings_ms": {},
             })
+
+    def _emit_state(
+        self,
+        job: SemanticJob,
+        status: str,
+        error_code: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        if self.on_state is not None:
+            self.on_state(job, {
+                "status": status,
+                "observation": None,
+                "error_code": error_code,
+                "error": error,
+                "timings_ms": {},
+            })
+
+    def _report_terminal_requests(self) -> None:
+        for request in self.scheduler.take_terminal():
+            self._report_terminal(request)
+
+    def _report_terminal(self, request: InferenceRequest, status: str | None = None) -> None:
+        with self._jobs_lock:
+            job = self._jobs.pop(request.request_id, None)
+        if job is None:
+            return
+        visible_status = status or (
+            "expired" if request.error == "deadline_exceeded" else "rejected"
+        )
+        self._emit_state(job, visible_status, request.error, request.error)

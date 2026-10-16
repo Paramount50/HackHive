@@ -220,8 +220,10 @@ def test_semantic_service_runs_one_bounded_background_worker(tmp_path) -> None:
 
     completed = Event()
     results = []
+    states = []
     service = SemanticInferenceService(
-        FakeWorker(), lambda job, result: (results.append((job, result)), completed.set())
+        FakeWorker(), lambda job, result: (results.append((job, result)), completed.set()),
+        on_state=lambda job, result: states.append(result["status"]),
     )
     service.start()
     try:
@@ -233,6 +235,7 @@ def test_semantic_service_runs_one_bounded_background_worker(tmp_path) -> None:
             sleep(0.01)
         assert service.snapshot()["state"] == "ready"
         assert service.snapshot()["pending"] == 0
+        assert states == ["pending", "running"]
     finally:
         service.close()
 
@@ -382,3 +385,80 @@ def test_store_attaches_supported_vlm_result_without_auto_accepting() -> None:
     audit_payload = json.loads(window["observations_json"])
     assert audit_payload["observation"]["summary"].startswith("A visible person")
     assert audit_payload["raw_output"] == "{}"
+    projected = store.get_event(event_id)["verification"]
+    assert projected["status"] == "completed"
+    assert projected["verdict"] == "supported"
+
+
+def test_semantic_states_upsert_one_visible_attempt() -> None:
+    store = Store()
+    session = store.create_session(10_000)
+    event_id = store.record_analysis(
+        session, 10_000, 13_000,
+        FixtureAnalysis(
+            outcome="person_down", summary="CPU candidate",
+            observations=[{"predicate": "cpu_candidate_rule", "supported": True}],
+            model_id="candidate://cpu-rules",
+        ),
+        "state-candidate", start_pts_ms=0,
+    )
+    job = SemanticJob(
+        event_id=event_id, camera_id="cam-1", candidate_key="state-candidate",
+        expected_outcome="person_down", image_paths=("0", "1", "2", "3"),
+        source_pts_ms=(0, 1_000, 2_000, 3_000), verification_id="attempt-1",
+    )
+    assert store.record_vlm_result(job, {"status": "pending"}) == "pending"
+    assert store.get_event(event_id)["verification"]["status"] == "pending"
+    assert store.record_vlm_result(job, {
+        "status": "failed", "error_code": "model_load_failed", "error": "fixture failure",
+    }) == "failed"
+    verification = store.get_event(event_id)["verification"]
+    assert verification["status"] == "failed"
+    assert verification["error_code"] == "model_load_failed"
+    count = store.connection.execute(
+        "SELECT COUNT(*) FROM analysis_windows WHERE window_id='attempt-1'"
+    ).fetchone()[0]
+    assert count == 1
+
+
+def test_semantic_service_exposes_coalescing_without_leaking_old_job() -> None:
+    states = []
+    service = SemanticInferenceService(
+        object(), lambda job, result: None,
+        on_state=lambda job, result: states.append((job.verification_id, result)),
+    )
+    old = semantic_job(("0", "1", "2", "3"))
+    newer = semantic_job(("4", "5", "6", "7"))
+    assert service.submit(old)
+    assert service.submit(newer)
+    assert [result["status"] for _, result in states] == ["pending", "rejected", "pending"]
+    assert states[1][1]["error_code"] == "coalesced_by_newer_request"
+    assert len(service._jobs) == 1
+
+
+def test_semantic_service_exposes_expiry_after_slow_load() -> None:
+    class SlowLoadingWorker:
+        def load(self):
+            sleep(0.05)
+            return {"model_id": "fixture", "revision": "test"}
+
+    terminal = Event()
+    states = []
+
+    def capture(job, result):
+        states.append(result)
+        if result["status"] == "expired":
+            terminal.set()
+
+    service = SemanticInferenceService(
+        SlowLoadingWorker(), lambda job, result: None,
+        deadline_seconds=0.01, on_state=capture,
+    )
+    assert service.submit(semantic_job(("0", "1", "2", "3")))
+    service.start()
+    try:
+        assert terminal.wait(2)
+        assert [result["status"] for result in states] == ["pending", "expired"]
+        assert states[-1]["error_code"] == "deadline_exceeded"
+    finally:
+        service.close()

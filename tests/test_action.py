@@ -135,6 +135,8 @@ def test_xclip_window_creates_reviewable_action_event_with_model_scores(tmp_path
     assert event["category"] == "aggression_fight"
     assert event["decision_state"] == "needs_review"
     assert event["lifecycle_state"] == "ended"
+    assert event["verification"]["status"] == "not_configured"
+    assert event["verification"]["error_code"] == "vlm_not_configured"
     provenance = store.connection.execute(
         """SELECT model_id,model_revision,prompt_version FROM analysis_windows
         WHERE session_id='action-session'"""

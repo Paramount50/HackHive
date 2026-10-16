@@ -304,25 +304,39 @@ class Store:
         if event is None:
             raise KeyError(job.event_id)
         observation: VisualObservation | None = None
-        verdict = "inference_failed"
+        status = str(result.get("status", "failed"))
+        if status not in {"pending", "running", "completed", "rejected", "failed", "expired", "not_configured"}:
+            status = "failed"
+        verdict: str | None = None
         error_code = result.get("error_code")
-        if result.get("status") == "completed" and result.get("observation") is not None:
+        if status == "completed" and result.get("observation") is not None:
             try:
                 observation = VisualObservation.model_validate(result["observation"])
                 verdict = verification_verdict(observation, job.expected_outcome)
             except (TypeError, ValueError) as exc:
                 error_code = "invalid_model_output"
+                status = "failed"
                 result = {**result, "error": str(exc)[:1000]}
-        window_id = str(uuid.uuid4())
-        start_utc_ms = event["session_started_utc_ms"] + job.source_pts_ms[0]
-        end_utc_ms = event["session_started_utc_ms"] + job.source_pts_ms[-1]
+        elif status == "completed":
+            status = "failed"
+            error_code = error_code or "missing_observation"
+        window_id = job.verification_id or str(uuid.uuid4())
+        start_utc_ms = (
+            event["session_started_utc_ms"] + job.source_pts_ms[0]
+            if job.source_pts_ms else event["start_utc_ms"]
+        )
+        end_utc_ms = (
+            event["session_started_utc_ms"] + job.source_pts_ms[-1]
+            if job.source_pts_ms else event["last_observed_utc_ms"]
+        )
         payload = {
+            "status": status,
             "verdict": verdict,
             "expected_outcome": job.expected_outcome,
             "observation": observation.model_dump() if observation else None,
             "raw_output": str(result.get("raw_output", ""))[:8_000],
             "error": result.get("error"),
-            "error_code": result.get("error_code"),
+            "error_code": error_code,
             "validation_stage": result.get("validation_stage"),
             "validation_error": result.get("validation_error"),
             "hit_max_new_tokens": result.get("hit_max_new_tokens"),
@@ -330,25 +344,43 @@ class Store:
             "candidate_category": result.get("candidate_category", job.expected_outcome),
             "selection": result.get("selection"),
         }
-        status = "completed" if observation is not None else "failed"
         with self.connection:
             self.connection.execute(
                 """INSERT INTO analysis_windows
                 (window_id,session_id,start_utc_ms,end_utc_ms,frame_count,reason,status,model_outcome,
                  model_id,model_revision,prompt_version,observations_json,timings_json,error_code)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(window_id) DO UPDATE SET
+                 start_utc_ms=excluded.start_utc_ms,end_utc_ms=excluded.end_utc_ms,
+                 frame_count=excluded.frame_count,status=excluded.status,
+                 model_outcome=excluded.model_outcome,model_id=excluded.model_id,
+                 model_revision=excluded.model_revision,prompt_version=excluded.prompt_version,
+                 observations_json=excluded.observations_json,timings_json=excluded.timings_json,
+                 error_code=excluded.error_code""",
                 (
-                    window_id, event["session_id"], start_utc_ms, end_utc_ms, 4,
+                    window_id, event["session_id"], start_utc_ms, end_utc_ms, len(job.image_paths),
                     "vlm_verification", status,
                     observation.outcome if observation else None,
                     result.get("model_id"), result.get("model_revision"), result.get("prompt_version"),
                     json.dumps(payload), json.dumps(result.get("timings_ms", {})), error_code,
                 ),
             )
-            window_ids = json.loads(event["window_ids_json"])
+            current = self.connection.execute(
+                "SELECT window_ids_json,limitations_json,predicates_json FROM events WHERE event_id=?",
+                (job.event_id,),
+            ).fetchone()
+            window_ids = json.loads(current["window_ids_json"])
             window_ids.append(window_id)
-            limitations = json.loads(event["limitations_json"])
-            limitations.append(f"VLM verification verdict: {verdict}.")
+            window_ids = list(dict.fromkeys(window_ids))
+            limitations = json.loads(current["limitations_json"])
+            if verdict is not None:
+                limitation = f"VLM verification verdict: {verdict}."
+                if limitation not in limitations:
+                    limitations.append(limitation)
+            elif status in {"rejected", "failed", "expired", "not_configured"}:
+                limitation = f"VLM verification status: {status} ({error_code or 'unspecified'})."
+                if limitation not in limitations:
+                    limitations.append(limitation)
             updates: dict[str, Any] = {
                 "window_ids_json": json.dumps(window_ids),
                 "limitations_json": json.dumps(limitations[-8:]),
@@ -356,7 +388,11 @@ class Store:
                 "decision_state": str(DecisionState.NEEDS_REVIEW),
             }
             if verdict == "supported" and observation is not None:
-                predicates = json.loads(event["predicates_json"])
+                predicates = json.loads(current["predicates_json"])
+                predicates = [
+                    item for item in predicates
+                    if window_id not in item.get("evidence_window_ids", [])
+                ]
                 predicates.extend({
                     "name": item.predicate,
                     "supported": item.supported,
@@ -371,7 +407,7 @@ class Store:
                 f"UPDATE events SET {assignments} WHERE event_id=?",
                 [*updates.values(), job.event_id],
             )
-        return verdict
+        return verdict or status
 
     def close_inactive_events(
         self, observed_utc_ms: int, merge_gap_ms: int = 5_000, session_id: str | None = None
@@ -424,6 +460,7 @@ class Store:
         item["reviews"] = reviews
         item["predicates"] = json.loads(row["predicates_json"])
         item["limitations"] = json.loads(row["limitations_json"])
+        item["verification"] = self._verification_projection(event_id)
         if include_media:
             item["media"] = [
                 dict(media) for media in self.connection.execute(
@@ -432,6 +469,32 @@ class Store:
                 ).fetchall()
             ]
         return item
+
+    def _verification_projection(self, event_id: str) -> dict[str, Any]:
+        row = self.connection.execute(
+            """SELECT status,model_id,model_revision,prompt_version,observations_json,timings_json,error_code
+               FROM analysis_windows
+               WHERE reason='vlm_verification' AND window_id IN (
+                 SELECT value FROM json_each((SELECT window_ids_json FROM events WHERE event_id=?))
+               )
+               ORDER BY rowid DESC LIMIT 1""",
+            (event_id,),
+        ).fetchone()
+        if row is None:
+            return {"status": "not_run", "verdict": None}
+        payload = json.loads(row["observations_json"] or "{}")
+        return {
+            "status": row["status"],
+            "verdict": payload.get("verdict"),
+            "model_id": row["model_id"],
+            "model_revision": row["model_revision"],
+            "prompt_version": row["prompt_version"],
+            "observation": payload.get("observation"),
+            "selection": payload.get("selection"),
+            "timings_ms": json.loads(row["timings_json"] or "{}"),
+            "error_code": row["error_code"],
+            "error": payload.get("error"),
+        }
 
     def add_media(
         self,
@@ -627,6 +690,7 @@ class Store:
             item["reviews"] = reviews
             item["predicates"] = json.loads(row["predicates_json"])
             item["limitations"] = json.loads(row["limitations_json"])
+            item["verification"] = self._verification_projection(row["event_id"])
             result.append(item)
         return result
 

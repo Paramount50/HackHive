@@ -93,6 +93,7 @@ def get_vlm_service() -> SemanticInferenceService | None:
             vlm_service = SemanticInferenceService(
                 SmolVLMWorker(model_dir, variant=vlm_variant), _persist_vlm_result, max_pending=3,
                 selection_strategy=vlm_sampling_strategy,
+                on_state=_persist_vlm_result,
             )
             vlm_service.start()
         return vlm_service

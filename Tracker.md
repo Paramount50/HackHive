@@ -279,6 +279,16 @@ predicates. The original model summary, raw output, model revision and prompt
 provenance remain in the immutable analysis-window payload for audit.
 Verification: `python -m pytest -q` completed with 137 passed and one warning.
 
+Visible VLM lifecycle — 2026-10-16: each semantic attempt now has a stable ID
+and persists `pending`, `running`, `completed`, `rejected`, `failed`, `expired`
+or `not_configured` in one upserted analysis window. Event API projections
+expose the latest state, verdict, evidence, model/prompt provenance, sampling,
+timings and errors. Queue coalescing removes the superseded semantic job instead
+of leaking it; deadline expiry and missing configuration remain distinct from a
+contradicted candidate. Tests cover pending/running/completed, coalescing,
+expiry, not-configured and failed persistence. Verification:
+`python -m pytest -q` completed with 140 passed and one warning.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.
