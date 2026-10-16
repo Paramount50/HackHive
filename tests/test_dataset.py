@@ -11,12 +11,14 @@ def entry(
     split: str,
     categories=None,
     source_sha256: str | None = None,
+    annotation_status: str = "human_confirmed",
 ) -> ManifestEntry:
     return ManifestEntry(
         sample_id=sample_id,
         source_id=source_id,
         source_sha256=source_sha256 or hashlib.sha256(source_id.encode()).hexdigest(),
         split=split,
+        annotation_status=annotation_status,
         start_ms=0,
         end_ms=10_000,
         categories=categories or [],
@@ -34,6 +36,8 @@ def test_manifest_summary_preserves_negatives_and_test_split() -> None:
     assert report["sources"] == 2
     assert report["negative_samples"] == 1
     assert report["categories"] == {"person_down": 1}
+    assert report["annotation_statuses"] == {"human_confirmed": 2}
+    assert report["ready_to_freeze"] is True
     assert report["warnings"] == []
 
 
@@ -52,6 +56,21 @@ def test_manifest_rejects_identical_content_under_different_source_ids() -> None
             entry("clip-a", "named-copy-a", "validation", source_sha256=repeated_hash),
             entry("clip-b", "named-copy-b", "test", source_sha256=repeated_hash),
         ])
+
+
+def test_provisional_annotations_cannot_be_counted_as_negative_or_frozen() -> None:
+    report = validate_manifest([
+        entry(
+            "provisional",
+            "source-provisional",
+            "validation",
+            source_sha256="b" * 64,
+            annotation_status="provisional",
+        ),
+    ])
+    assert report["negative_samples"] == 0
+    assert report["ready_to_freeze"] is False
+    assert "manifest contains provisional labels requiring human confirmation" in report["warnings"]
 
 
 def test_manifest_rejects_duplicate_sample_ids() -> None:

@@ -124,6 +124,7 @@ def main() -> int:
                 "source_id": source_id,
                 "source_sha256": source_hash,
                 "split": split,
+                "annotation_status": "human_confirmed",
                 "start_ms": start_ms,
                 "end_ms": end_ms,
                 "categories": categories,

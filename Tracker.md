@@ -395,7 +395,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | ID | Owner | Priority | Task | Depends on | Status | Acceptance evidence to attach |
 |---|---|---|---|---|---|---|
 | T01 | A | P0 | Hardware budget and local four-frame smoke test | — | IN_PROGRESS | GPU is available; 20-request smoke returned 18 valid JSON outputs, all `unknown`; no quality result |
-| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | Labeling CLI covers integrated categories including aggression, collects provenance/license per unique source, and skips byte-identical files; manifest validation rejects duplicate content under different source IDs; actual labels, source rights/provenance, and splits still to collect |
+| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | Labeling CLI covers integrated categories including aggression, collects provenance/license per unique source, and skips byte-identical files; manifest validation rejects duplicate content under different source IDs and prevents provisional labels from being frozen; judge-provided sample draft exists, but needs human label confirmation, normal footage, and a held-out test source |
 | T03 | B | P0 | SQLite/API skeleton and validated contracts | — | DONE | `backend/storage.py`, `backend/contracts.py`, `backend/main.py`; `pytest -q` passes 5 tests covering unknown outcomes, merge deduplication, idempotent review, time filtering, fixture API and citations |
 | T04 | B | P0 | Paced replay/webcam, timestamps, ring buffer | T03 | IN_PROGRESS | Real replay runs in a bounded background worker; frames now reach the detector/event/media callback; webcam remains pending |
 | T05 | A | P0 | CPU detection/tracking and temporal candidates | T04 | IN_PROGRESS | YOLO11n weights and Ultralytics are present; detection runs on sampled frames, but per-class event quality and ByteTrack comparison remain unvalidated |
@@ -424,6 +424,17 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | Alert p50/p95 and missed-event count | Not measured |
 | Peak memory and missed audit deadlines | Latest integrated XCLIP + 500M replay: 3716 MiB total GPU memory used, 2279 MiB free, PyTorch peak allocation 1933.6 MiB; audit deadlines not measured |
 | Chat exact-match and citation validity | Not measured |
+
+Provisional dataset review — 2026-10-16: inventory of `sample_videos` found ten
+files representing six byte-distinct sources, totaling 38.799 seconds. The user
+confirmed the clips were supplied by hackathon judges and permitted for project
+evaluation. Created `evaluation/sample_manifest.provisional.jsonl` with five
+visual-draft aggression intervals and one unresolved low-visibility clip. All
+entries are marked `provisional` and assigned to `validation` because these clips
+were already used in system smoke/replay; they are not held-out test footage.
+Manifest validation reports six sources, five aggression labels, zero confirmed
+negatives, and `ready_to_freeze: false`; it flags missing negatives, test sources,
+and human confirmation. No accuracy or false-alert claim is supported.
 
 Kaggle 2.2B candidate smoke follow-up — 2026-10-16: the user-shared
 `aggression_fight` run loaded SmolVLM2-2.2B but produced 0/3 structurally valid

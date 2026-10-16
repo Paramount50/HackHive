@@ -318,13 +318,23 @@ record only clear event intervals or confirmed-normal footage:
 
 The tool asks for provenance and permission/license basis separately for each unique
 source; do not guess or reuse a global answer when sources differ. Use `s` for an
-ambiguous clip rather than labeling it normal. Keep all windows from a source in the same split. The labeling tool covers the integrated person-down, crowd,
+ambiguous clip rather than labeling it normal. The generated entries are marked
+`human_confirmed`; provisional agent drafts must use `annotation_status: provisional`
+and will not count as negatives or be considered freeze-ready by validation. Keep all
+windows from a source in the same split. The labeling tool covers the integrated person-down, crowd,
 tailgating, and aggression categories; experimental fire/smoke and restricted-area
 intrusion are excluded. Byte-identical source files are skipped, and manifest
 validation rejects identical content recorded under different source IDs, preventing
 duplicate clips from leaking across splits or inflating the sample count. Six short
 clips are only a pilot set; do not claim robust accuracy or deployment readiness
 from them.
+
+`evaluation/sample_manifest.provisional.jsonl` is an agent-generated draft for the
+judge-provided clips, based on time-sampled visual review. It is explicitly not
+ground truth: review the source videos and confirm or correct every interval before
+changing its annotation status. The validator reports it as not ready to freeze.
+This draft has five proposed aggression intervals, one ambiguous clip, and no
+confirmed-normal footage; it cannot measure false alerts per hour.
 
 ## Evaluation
 

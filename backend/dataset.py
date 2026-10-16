@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -16,6 +16,7 @@ class ManifestEntry(BaseModel):
     source_id: str = Field(min_length=1, max_length=120)
     source_sha256: str
     split: str
+    annotation_status: Literal["provisional", "human_confirmed"]
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
     categories: list[Category] = Field(default_factory=list, max_length=3)
@@ -79,17 +80,25 @@ def validate_manifest(entries: list[ManifestEntry]) -> dict[str, Any]:
 
     split_counts = Counter(entry.split for entry in entries)
     category_counts = Counter(str(category) for entry in entries for category in entry.categories)
-    negative_count = sum(not entry.categories for entry in entries)
+    annotation_counts = Counter(entry.annotation_status for entry in entries)
+    negative_count = sum(
+        not entry.categories and entry.annotation_status == "human_confirmed"
+        for entry in entries
+    )
     warnings = []
     if negative_count == 0:
         warnings.append("manifest has no explicitly negative samples")
     if split_counts["test"] == 0:
         warnings.append("manifest has no frozen test samples")
+    if annotation_counts["provisional"] > 0:
+        warnings.append("manifest contains provisional labels requiring human confirmation")
     return {
         "samples": len(entries),
         "sources": len(source_splits),
         "splits": dict(sorted(split_counts.items())),
         "categories": dict(sorted(category_counts.items())),
+        "annotation_statuses": dict(sorted(annotation_counts.items())),
         "negative_samples": negative_count,
+        "ready_to_freeze": not warnings,
         "warnings": warnings,
     }

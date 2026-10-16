@@ -33,6 +33,7 @@ def test_labeling_tool_includes_aggression_and_skips_duplicate_sources(
     assert [entry["categories"] for entry in entries] == [[], ["aggression_fight"]]
     assert entries[1]["start_ms"] == 500
     assert entries[1]["end_ms"] == 2_000
+    assert all(entry["annotation_status"] == "human_confirmed" for entry in entries)
     assert entries[0]["provenance"] == "same uploader/source"
     assert entries[1]["provenance"] == "news source"
     assert entries[0]["license"] == "license A"
