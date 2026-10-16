@@ -337,6 +337,22 @@ creating one event per stride. XCLIP runtime exceptions persist a failed
 analysis window while CPU candidates continue through the same replay.
 Verification: `python -m pytest -q` completed with 143 passed and two warnings.
 
+RTX 3060 integrated replay smoke — 2026-10-16: `v001_converted 3.avi` ran
+through the real replay endpoint at 5 sampled FPS with pacing disabled. The
+6.43-second source completed with 33 sampled frames, two events and no replay
+error. XCLIP produced an `aggression_fight` candidate (normalized score 0.593,
+uncalibrated) and a `crowd_gathering` candidate (normalized score 0.403,
+uncalibrated). SmolVLM2-500M completed aggression verification in 13.675 seconds
+with a deterministic `contradicted` verdict. Crowd verification ran for 13.113
+seconds but was persisted as `failed` because the model returned duplicate
+`evidence_frames`, violating the distinct-local-index contract. This is a
+runtime smoke result, not an accuracy result. After both XCLIP and the 500M VLM
+were resident, the system snapshot showed 3536 MiB total GPU memory in use,
+2459 MiB free and 2.92 GiB available system RAM; these are whole-system
+snapshots, not isolated peak allocations. Ultralytics also required
+`YOLO_CONFIG_DIR` to point inside the writable project on this managed Windows
+runtime.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.
@@ -385,7 +401,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | Normal footage hours and false alerts | Not measured |
 | B0/C1 calls per minute and recall difference | Not measured |
 | Alert p50/p95 and missed-event count | Not measured |
-| Peak memory and missed audit deadlines | 1106.82 MiB PyTorch allocated in one smoke; audit deadlines not integrated/measured |
+| Peak memory and missed audit deadlines | 1106.82 MiB PyTorch allocated in one VLM-only smoke; integrated XCLIP + 500M replay snapshot used 3536 MiB total GPU memory with 2459 MiB free; audit deadlines not measured |
 | Chat exact-match and citation validity | Not measured |
 
 ## Decision/change log
