@@ -425,16 +425,20 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | Peak memory and missed audit deadlines | Latest integrated XCLIP + 500M replay: 3716 MiB total GPU memory used, 2279 MiB free, PyTorch peak allocation 1933.6 MiB; audit deadlines not measured |
 | Chat exact-match and citation validity | Not measured |
 
-Provisional dataset review — 2026-10-16: inventory of `sample_videos` found ten
-files representing six byte-distinct sources, totaling 38.799 seconds. The user
-confirmed the clips were supplied by hackathon judges and permitted for project
-evaluation. Created `evaluation/sample_manifest.provisional.jsonl` with five
-visual-draft aggression intervals and one unresolved low-visibility clip. All
-entries are marked `provisional` and assigned to `validation` because these clips
-were already used in system smoke/replay; they are not held-out test footage.
-Manifest validation reports six sources, five aggression labels, zero confirmed
-negatives, and `ready_to_freeze: false`; it flags missing negatives, test sources,
-and human confirmation. No accuracy or false-alert claim is supported.
+Dataset review — 2026-10-16: inventory of `sample_videos` found ten files
+representing six byte-distinct sources, totaling 38.799 seconds. The user confirmed
+the clips were supplied by hackathon judges and permitted for project evaluation,
+and confirmed aggression is present in all six. The v026 aggression interval
+(00:00.000–00:02.000) is human-confirmed; the other five interval boundaries remain
+provisional visual estimates. The user notes v026 has poor quality and a misleading
+angle: two people, including one dragging another, are visible in the first two
+seconds; only one person is visible afterward, with a person on the floor in the
+final seconds. All sources are assigned to `validation` because
+they were already used in system smoke/replay; they are not held-out test footage.
+Manifest validation reports six sources, five provisional intervals, one
+human-confirmed interval, zero confirmed negatives, and `ready_to_freeze: false`;
+normal footage and held-out test sources are still missing. No accuracy or
+false-alert claim is supported.
 
 Kaggle 2.2B candidate smoke follow-up — 2026-10-16: the user-shared
 `aggression_fight` run loaded SmolVLM2-2.2B but produced 0/3 structurally valid

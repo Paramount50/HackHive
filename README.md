@@ -329,12 +329,12 @@ duplicate clips from leaking across splits or inflating the sample count. Six sh
 clips are only a pilot set; do not claim robust accuracy or deployment readiness
 from them.
 
-`evaluation/sample_manifest.provisional.jsonl` is an agent-generated draft for the
-judge-provided clips, based on time-sampled visual review. It is explicitly not
-ground truth: review the source videos and confirm or correct every interval before
-changing its annotation status. The validator reports it as not ready to freeze.
-This draft has five proposed aggression intervals, one ambiguous clip, and no
-confirmed-normal footage; it cannot measure false alerts per hour.
+`evaluation/sample_manifest.provisional.jsonl` records labels for the judge-provided
+clips. The user confirmed aggression is present in all six; the v026 interval
+(00:00.000–00:02.000) is human-confirmed, while the other five interval boundaries
+remain provisional visual estimates. The manifest is still not ready to freeze:
+there is no confirmed-normal footage or held-out test source, so it cannot measure
+false alerts per hour or support a held-out accuracy claim.
 
 ## Evaluation
 
