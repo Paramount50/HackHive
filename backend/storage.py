@@ -20,6 +20,57 @@ from .inference.contracts import VisualObservation, verification_verdict
 from .inference.service import SemanticJob
 
 
+VERIFIED_SUMMARY_PREFIXES = {
+    "person_down": "Possible person-down incident.",
+    "crowd_gathering": "Possible sustained crowd gathering.",
+    "suspected_tailgating": "Possible close same-direction gate passages.",
+    "aggression_fight": "Possible physical altercation.",
+    "fire_smoke": "Possible fire or smoke.",
+    "intrusion_unauthorized_access": "Possible restricted-area intrusion.",
+}
+PREDICATE_LABELS = {
+    "visible_person": "a visible person",
+    "prone_posture": "prone posture",
+    "persistence": "posture persistence",
+    "usable_context": "usable scene context",
+    "people_in_zone": "people in the monitored zone",
+    "threshold_reached": "the configured crowd threshold",
+    "duration_reached": "the configured crowd duration",
+    "scene_visibility": "scene visibility",
+    "distinct_people": "distinct people",
+    "same_direction_passages": "same-direction passages",
+    "temporal_proximity": "temporal proximity",
+    "gate_visibility": "gate visibility",
+    "multiple_people_visible": "multiple people",
+    "physical_contact": "physical contact",
+    "aggressive_motion": "aggressive motion",
+    "temporal_persistence": "temporal persistence",
+    "flame_like_region": "a flame-like region",
+    "smoke_like_region": "a smoke-like region",
+    "person_in_restricted_zone": "a person in the restricted zone",
+    "restricted_boundary_crossing": "restricted-boundary crossing",
+}
+
+
+def verified_event_summary(category: str, observation: VisualObservation) -> str:
+    """Build event-facing text from controlled evidence, never model prose."""
+    supported = [
+        PREDICATE_LABELS[item.predicate]
+        for item in observation.observations
+        if item.supported is True and item.predicate in PREDICATE_LABELS
+    ]
+    if not supported:
+        return VERIFIED_SUMMARY_PREFIXES[category]
+    if len(supported) == 1:
+        evidence = supported[0]
+    else:
+        evidence = f"{', '.join(supported[:-1])} and {supported[-1]}"
+    suffix = " Authorization remains unknown without policy/access evidence." if (
+        category == "intrusion_unauthorized_access"
+    ) else ""
+    return f"{VERIFIED_SUMMARY_PREFIXES[category]} Visual verification supports {evidence}.{suffix}"
+
+
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS cameras (
@@ -313,7 +364,7 @@ class Store:
                     "frame_indices": item.frame_indices,
                     "source": "vlm_verification",
                 } for item in observation.observations)
-                updates["summary"] = observation.summary
+                updates["summary"] = verified_event_summary(job.expected_outcome, observation)
                 updates["predicates_json"] = json.dumps(predicates)
             assignments = ",".join(f"{column}=?" for column in updates)
             self.connection.execute(

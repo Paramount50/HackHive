@@ -367,11 +367,18 @@ def test_store_attaches_supported_vlm_result_without_auto_accepting() -> None:
     assert verdict == "supported"
     event = store.get_event_row(event_id)
     assert event["decision_state"] == "needs_review"
-    assert event["summary"].startswith("A visible person")
+    assert event["summary"] == (
+        "Possible person-down incident. Visual verification supports a visible person, "
+        "prone posture, posture persistence and usable scene context."
+    )
     window_id = json.loads(event["window_ids_json"])[-1]
     window = store.connection.execute(
-        "SELECT reason,status,model_outcome FROM analysis_windows WHERE window_id=?", (window_id,)
+        "SELECT reason,status,model_outcome,observations_json FROM analysis_windows WHERE window_id=?",
+        (window_id,)
     ).fetchone()
-    assert dict(window) == {
-        "reason": "vlm_verification", "status": "completed", "model_outcome": "person_down"
-    }
+    assert window["reason"] == "vlm_verification"
+    assert window["status"] == "completed"
+    assert window["model_outcome"] == "person_down"
+    audit_payload = json.loads(window["observations_json"])
+    assert audit_payload["observation"]["summary"].startswith("A visible person")
+    assert audit_payload["raw_output"] == "{}"
