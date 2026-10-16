@@ -97,9 +97,12 @@ timestamps, latency, and peak VRAM. This is not an accuracy evaluation.
 Candidate mode requires a fixed `evidence` and `evidence_frames` entry for every
 predicate in the selected category. The application still normalizes that
 response into its existing observations contract and retains the raw JSON.
-Frame indices are constrained to `0..3` and invalid references are rejected,
-never clamped or removed; constrained decoding does not replace downstream
-validation.
+The model sees only local frame labels `0..3`; source PTS values remain internal
+metadata and are persisted in the request provenance. Frame indices are
+constrained to `0..3` and invalid references are rejected, never clamped or
+removed; constrained decoding does not replace downstream validation. Candidate
+summaries are deliberately limited to one concise sentence rather than relying
+on a larger generation budget.
 
 For a fair structural/performance comparison, create and reuse one deterministic
 window manifest:

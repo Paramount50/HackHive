@@ -204,7 +204,7 @@ def generation_schema(candidate_outcome: str | None = None) -> dict:
         predicates = PREDICATES[outcome]
         schema = VisualObservation.model_json_schema()
         schema["properties"]["outcome"] = {"type": "string", "enum": [outcome]}
-        schema["properties"]["summary"]["maxLength"] = 160
+        schema["properties"]["summary"]["maxLength"] = 100 if candidate_outcome else 160
         schema["properties"]["limitations"] = {
             "type": "array", "maxItems": 2, "items": {"type": "string", "maxLength": 120}}
         if candidate_outcome is not None:

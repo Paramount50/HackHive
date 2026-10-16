@@ -229,6 +229,17 @@ checked-in workspace has earlier generic smoke reports but not the newer Kaggle
 candidate report, so the exact invalid generated index remains pending from
 that raw report.
 
+Candidate frame-reference follow-up — 2026-10-16: candidate prompts no longer
+expose source PTS values to SmolVLM; they label images only as local frame
+indices `0..3`. Source PTS values remain in the result and selection
+provenance. Candidate summaries now request one concise sentence and use a
+shorter schema bound. The schema declares frame bounds, but downstream
+validation remains authoritative because LM Format Enforcer numeric-bound
+support is not treated as proven. Truncated JSON remains an invalid output;
+token count, EOS, max-token, and raw-output diagnostics remain recorded. The
+newer Kaggle run still needs to be repeated to separate its exact truncation
+cause from the source-PTS confusion.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

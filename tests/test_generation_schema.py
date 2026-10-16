@@ -2,7 +2,10 @@ import json
 
 import pytest
 
-from backend.inference.contracts import generation_schema, parse_candidate_observation, parse_observation
+from backend.inference.contracts import (
+    generation_schema, parse_candidate_observation, parse_observation, verification_verdict,
+)
+from backend.inference.smolvlm import candidate_prompt
 
 
 def accepts(text):
@@ -101,6 +104,43 @@ def test_candidate_parser_rejects_out_of_range_frame_without_repair():
     })
     with pytest.raises(ValueError, match="outside this request"):
         parse_candidate_observation(raw, 4, "aggression_fight")
+
+
+def test_candidate_prompt_uses_only_local_frame_indices():
+    prompt = candidate_prompt("aggression_fight")
+    assert "LOCAL FRAME INDEX" in prompt
+    assert "source PTS" not in prompt
+
+
+def test_truncated_candidate_json_remains_invalid():
+    with pytest.raises(ValueError, match="Expecting value"):
+        parse_candidate_observation(
+            '{"outcome":"aggression_fight","summary":"A fight is visible","evidence":',
+            4,
+            "aggression_fight",
+        )
+
+
+def test_complete_aggression_candidate_is_supported():
+    raw = json.dumps({
+        "outcome": "aggression_fight",
+        "summary": "People are physically fighting.",
+        "evidence": {
+            "aggressive_motion": True,
+            "multiple_people_visible": True,
+            "physical_contact": True,
+            "temporal_persistence": True,
+        },
+        "evidence_frames": {
+            "aggressive_motion": [1, 2, 3],
+            "multiple_people_visible": [1, 2, 3],
+            "physical_contact": [1, 2, 3],
+            "temporal_persistence": [1, 2, 3],
+        },
+        "limitations": [],
+    })
+    observation = parse_candidate_observation(raw, 4, "aggression_fight")
+    assert verification_verdict(observation, "aggression_fight") == "supported"
 
 
 def test_duplicate_predicates_are_rejected_after_generation():
