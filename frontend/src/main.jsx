@@ -182,7 +182,6 @@ function QueryPanel({ onSelect, onError }) {
 }
 
 function EventCard({ event, selected, onSelect, onReview }) {
-  const score = Math.round(event.confidence_score * 4);
   return (
     <article className={`event-card ${selected ? "selected" : ""}`} onClick={() => onSelect(event)}>
       {event.thumbnail_media_id
@@ -194,7 +193,7 @@ function EventCard({ event, selected, onSelect, onReview }) {
         <span className="review-state">{event.review_status}</span>
       </div>
       <p>{event.summary}</p>
-      <div className="metadata">System decision: {event.decision_state} · Evidence score {score}/4 · uncalibrated</div>
+      <div className="metadata">System decision: {event.decision_state}</div>
       <div className="metadata">{event.has_ready_media ? "Keyframe or clip available" : "No playable evidence available"}</div>
       <div className="actions">
         <button onClick={(e) => { e.stopPropagation(); onReview(event, "confirm"); }}>Confirm</button>
@@ -224,7 +223,6 @@ function EvidenceDrawer({ event, onClose }) {
         <dt>System prediction</dt><dd>{event.decision_state}</dd>
         <dt>Human review</dt><dd>{event.review_status}</dd>
         <dt>Authorization</dt><dd>{event.authorization_state} · {event.access_evidence_source ?? "no policy/access evidence"}</dd>
-        <dt>Evidence score</dt><dd>{Math.round(event.confidence_score * 4)}/4 · uncalibrated</dd>
       </dl>
       <h3>Limitations</h3>
       <ul>{event.limitations.map((item) => <li key={item}>{item}</li>)}</ul>

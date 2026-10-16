@@ -141,7 +141,7 @@ async function seed(){let r=await fetch('/api/fixtures/run',{method:'POST'});let
 document.getElementById('message').textContent=x.message;load()}
 async function load(){let x=await (await fetch('/api/events')).json();document.getElementById('events').innerHTML=x.events.map(e=>
 `<div class="event"><b>${e.category}</b> · ${e.review_status}<br>${e.summary}<br>
-<span class="muted">System decision: ${e.decision_state} · Evidence score ${Math.round(e.confidence_score*4)}/4 · uncalibrated</span>
+<span class="muted">System decision: ${e.decision_state}</span>
 <button onclick="review('${e.event_id}','confirm')">Confirm</button>
 <button onclick="review('${e.event_id}','reject')">Reject</button></div>`).join('')||'No matching recorded incidents.'}
 async function review(id,action){await fetch('/api/events/'+id+'/reviews',{method:'POST',headers:{'content-type':'application/json'},

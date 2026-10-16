@@ -370,6 +370,8 @@ def test_store_attaches_supported_vlm_result_without_auto_accepting() -> None:
     assert verdict == "supported"
     event = store.get_event_row(event_id)
     assert event["decision_state"] == "needs_review"
+    assert event["confidence_kind"] == "evidence_completeness_v2"
+    assert event["confidence_score"] == 1.0
     assert event["summary"] == (
         "Possible person-down incident. Visual verification supports a visible person, "
         "prone posture, posture persistence and usable scene context."

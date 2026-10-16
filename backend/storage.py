@@ -16,7 +16,7 @@ from .contracts import (
     ReviewStatus,
     utc_now_ms,
 )
-from .inference.contracts import VisualObservation, verification_verdict
+from .inference.contracts import PREDICATES, VisualObservation, verification_verdict
 from .inference.service import SemanticJob
 
 
@@ -69,6 +69,16 @@ def verified_event_summary(category: str, observation: VisualObservation) -> str
         category == "intrusion_unauthorized_access"
     ) else ""
     return f"{VERIFIED_SUMMARY_PREFIXES[category]} Visual verification supports {evidence}.{suffix}"
+
+
+def evidence_completeness(category: str, predicates: list[dict[str, Any]]) -> float:
+    """Return answered controlled predicates / expected controlled predicates."""
+    expected = PREDICATES.get(category, set()) - {"access_mismatch"}
+    if not expected:
+        return 0.0
+    latest = {item.get("name"): item.get("supported") for item in predicates}
+    answered = sum(type(latest.get(predicate)) is bool for predicate in expected)
+    return answered / len(expected)
 
 
 SCHEMA = """
@@ -254,7 +264,7 @@ class Store:
             self.connection.commit()
             return existing["event_id"]
         predicates = self._predicates(analysis)
-        score = sum(p.get("supported") is True for p in predicates) / 4
+        score = evidence_completeness(outcome, predicates)
         event_id = str(uuid.uuid4())
         policy = self.connection.execute(
             "SELECT policy_version,policy_json FROM stream_sessions WHERE session_id=?", (session_id,)
@@ -272,7 +282,7 @@ class Store:
             (event_id, candidate_key, session_id, outcome, start_utc_ms, end_utc_ms, end_utc_ms,
              start_utc_ms if start_pts_ms is None else start_pts_ms,
              now, decision, "active", analysis.summary, score,
-             "evidence_completeness_v1", json.dumps(predicates), "[]", json.dumps([window_id]),
+             "evidence_completeness_v2", json.dumps(predicates), "[]", json.dumps([window_id]),
              policy["policy_version"], policy["policy_json"],
              (
                  "unknown"
@@ -402,6 +412,10 @@ class Store:
                 } for item in observation.observations)
                 updates["summary"] = verified_event_summary(job.expected_outcome, observation)
                 updates["predicates_json"] = json.dumps(predicates)
+                updates["confidence_score"] = evidence_completeness(
+                    job.expected_outcome, predicates
+                )
+                updates["confidence_kind"] = "evidence_completeness_v2"
             assignments = ",".join(f"{column}=?" for column in updates)
             self.connection.execute(
                 f"UPDATE events SET {assignments} WHERE event_id=?",

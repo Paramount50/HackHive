@@ -289,6 +289,14 @@ contradicted candidate. Tests cover pending/running/completed, coalescing,
 expiry, not-configured and failed persistence. Verification:
 `python -m pytest -q` completed with 140 passed and one warning.
 
+Evidence completeness — 2026-10-16: the compatibility
+`confidence_score` field now uses `evidence_completeness_v2`, derived from the
+current answered controlled predicates for the event category and recalculated
+when supported VLM evidence is attached. The dashboard no longer presents this
+internal completeness value as an operator-facing score or probability.
+Verification: `python -m pytest -q` completed with 140 passed and one warning;
+the Vite production build completed successfully.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.
