@@ -165,16 +165,17 @@ the 256-token cap (207-213 tokens in the reproduced failures), so truncation is 
 supported by this evidence. Updated the prompt/schema to request and constrain distinct
 observation objects, and now record JSON/validation stage plus EOS/capacity diagnostics.
 Verification: 84 tests passed, 5 GPU-dependent tests skipped. This is a structural
-reliability fix only; no accuracy claim or new visual categories was added.
+reliability fix only; no accuracy claim was added.
 
 Kaggle audit follow-up: verification now distinguishes a required predicate explicitly
 reported false (`contradicted`), explicitly unknown (`inconclusive`), and omitted
 (`insufficient_evidence`). A schema-valid `person_down` response with false
 `persistence`/`visible_person` evidence or no observations therefore cannot be treated
 as semantically supported. Raw model output remains stored; the model output is not
-rewritten. The supplied fight clip remains out of scope for SmolVLM accuracy because
-`aggression_fight` is not in its current visual contract. The unverified gun statement
-remains an unconfirmed model claim because source frames were not supplied here.
+rewritten. The supplied fight clip remains an unsupported accuracy benchmark until
+the expanded contract is rerun on the same frozen windows. The unverified gun
+statement remains an unconfirmed model claim because source frames were not supplied
+here.
 
 Generation-constraint audit: `generation_schema()` previously declared JSON Schema
 `uniqueItems`, but the Kaggle LMFE 0.11.3 parser accepted exact duplicate observation
@@ -195,8 +196,16 @@ hardware are recorded per run. The 2.2B admission floor is 6144 MiB and is not a
 claim that it fits the 6 GiB laptop; Kaggle T4 execution remains GPU-unverified.
 The official config exposes the expected SmolVLM vision path, and the adapter now
 records an explicit Swift Sampling compatibility check with uniform fallback through
-the existing service. No category or semantic-verdict changes were made; no accuracy
-claim is supported without labelled windows.
+the existing service. No accuracy claim is supported without labelled windows.
+
+Visual taxonomy expansion: the SmolVLM contract now supports the six controlled
+incident categories plus `none` and `unknown`. Added category-specific observable
+predicates and required-evidence checks for physical altercation, flame/smoke, and
+restricted-boundary crossing. Authorization remains external policy evidence;
+`intrusion_unauthorized_access` is presented in the UI as possible restricted-area
+intrusion. Verification: 15 focused contract/semantic tests passed; full-suite and
+frontend verification remain to be run. No accuracy improvement has been measured;
+the same fight-video windows still require a GPU rerun.
 
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 

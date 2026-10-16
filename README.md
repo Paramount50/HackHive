@@ -112,6 +112,14 @@ by independent semantic validation. `--unconstrained` enables a diagnostic compa
 Prompt-only pilots failed formatting; constrained pilots returned valid JSON but
 abstained (`unknown`). Valid JSON is not detection accuracy, and this model configuration
 must not auto-accept incidents. Inspect outcome counts and raw responses before integration.
+The controlled visual outcomes are `person_down`, `crowd_gathering`,
+`suspected_tailgating`, `aggression_fight`, `fire_smoke`,
+`intrusion_unauthorized_access`, `none`, and `unknown`. `none` means the scene is
+visible but no controlled incident is supported; `unknown` means the frames or
+context are insufficient. Required category evidence is checked independently:
+visual restricted-area evidence cannot establish authorization, and a different
+model category remains a category conflict rather than changing the stored event.
+The expanded categories are contract-ready but not accuracy-validated.
 
 Each run creates a new `reports/vlm-<UTC timestamp>/` directory containing source
 hashes, hardware, exact model/prompt/runtime configuration, raw outputs and failures,

@@ -13,12 +13,17 @@ from .contracts import ObservationValidationError, PREDICATES, generation_schema
 from .hardware import gpu_budget_mib, hardware_report
 from .swift_sampling import select_temporal_surprises
 
-PROMPT_VERSION = "visual-p0-v6"
+PROMPT_VERSION = "visual-p0-v7"
 PROMPT = (
     "What visibly happens across these four ordered camera frames? "
-    "Choose person_down for a person remaining prone; crowd_gathering for people remaining together; "
-    "suspected_tailgating for two people following through a gate; none if none of these is visible; "
-    "unknown if the view is insufficient to decide. "
+    "Choose person_down for a person remaining clearly prone; crowd_gathering for multiple people "
+    "remaining together; suspected_tailgating for two distinct people passing through a gate in "
+    "the same direction; aggression_fight only for visible physical altercation; fire_smoke only "
+    "for visible flames or substantial smoke; intrusion_unauthorized_access only for visible "
+    "restricted-boundary crossing, never authorization. "
+    "Choose a category only when the supplied frames visibly support it. Do not choose the closest "
+    "category when evidence is absent. Use none when the scene is visible but no controlled incident "
+    "fits; use unknown when visibility or context is insufficient. "
     "Write a short factual summary of this particular scene, and limitations. "
     "For an incident, give at most two observations with predicate, supported (true/false/null), "
     "and frame_indices (0 to 3); every predicate must be distinct. Predicates: " + json.dumps({

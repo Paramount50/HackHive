@@ -7,17 +7,42 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-Outcome = Literal["person_down", "crowd_gathering", "suspected_tailgating", "none", "unknown"]
+Outcome = Literal[
+    "person_down", "crowd_gathering", "suspected_tailgating",
+    "aggression_fight", "fire_smoke", "intrusion_unauthorized_access",
+    "none", "unknown",
+]
 PREDICATES = {
     "person_down": {"visible_person", "prone_posture", "persistence", "usable_context"},
     "crowd_gathering": {"people_in_zone", "threshold_reached", "duration_reached", "scene_visibility"},
-    "suspected_tailgating": {"same_direction_passages", "temporal_proximity", "gate_visibility", "access_mismatch"},
+    "suspected_tailgating": {
+        "distinct_people", "same_direction_passages", "temporal_proximity",
+        "gate_visibility", "access_mismatch",
+    },
+    "aggression_fight": {
+        "multiple_people_visible", "physical_contact", "aggressive_motion",
+        "temporal_persistence",
+    },
+    "fire_smoke": {
+        "flame_like_region", "smoke_like_region", "temporal_persistence",
+        "scene_visibility",
+    },
+    "intrusion_unauthorized_access": {
+        "person_in_restricted_zone", "restricted_boundary_crossing",
+        "scene_visibility", "temporal_persistence",
+    },
     "none": set(), "unknown": set(),
 }
 REQUIRED_VISUAL_EVIDENCE = {
     "person_down": {"visible_person", "prone_posture"},
     "crowd_gathering": {"people_in_zone", "scene_visibility"},
     "suspected_tailgating": {"same_direction_passages", "gate_visibility"},
+    "aggression_fight": {"multiple_people_visible", "physical_contact"},
+    "fire_smoke": {"scene_visibility"},
+    "intrusion_unauthorized_access": {"restricted_boundary_crossing", "scene_visibility"},
+}
+ALTERNATIVE_VISUAL_EVIDENCE = {
+    "fire_smoke": {"flame_like_region", "smoke_like_region"},
 }
 
 
@@ -95,6 +120,11 @@ def verification_verdict(observation: VisualObservation, expected_outcome: str) 
     if any(predicate in evidence and evidence[predicate] is None for predicate in required):
         return "inconclusive"
     if any(predicate not in evidence for predicate in required):
+        return "insufficient_evidence"
+    alternatives = ALTERNATIVE_VISUAL_EVIDENCE.get(expected_outcome)
+    if alternatives and not any(evidence.get(predicate) is True for predicate in alternatives):
+        if all(evidence.get(predicate) is False for predicate in alternatives):
+            return "contradicted"
         return "insufficient_evidence"
     return "supported"
 

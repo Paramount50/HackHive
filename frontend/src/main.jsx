@@ -8,7 +8,7 @@ const labels = {
   suspected_tailgating: "Suspected tailgating",
   aggression_fight: "Possible physical altercation",
   fire_smoke: "Possible fire or smoke",
-  intrusion_unauthorized_access: "Possible unauthorized access"
+  intrusion_unauthorized_access: "Possible restricted-area intrusion"
 };
 const terminalReplayStates = new Set(["completed", "failed", "stopped"]);
 

@@ -88,6 +88,82 @@ def test_person_down_with_empty_evidence_is_not_supported() -> None:
     assert verification_verdict(observation, "person_down") == "insufficient_evidence"
 
 
+def test_expanded_visual_categories_require_primary_evidence() -> None:
+    aggression = VisualObservation.model_validate({
+        "outcome": "aggression_fight",
+        "summary": "Two people visibly make physical contact.",
+        "observations": [
+            {"predicate": "multiple_people_visible", "supported": True, "frame_indices": [0]},
+            {"predicate": "physical_contact", "supported": True, "frame_indices": [1]},
+        ],
+        "limitations": [],
+    })
+    assert verification_verdict(aggression, "aggression_fight") == "supported"
+    assert verification_verdict(VisualObservation.model_validate({
+        "outcome": "aggression_fight",
+        "summary": aggression.summary,
+        "observations": [
+            {"predicate": "multiple_people_visible", "supported": True, "frame_indices": [0]},
+            {"predicate": "physical_contact", "supported": False, "frame_indices": [1]},
+        ],
+        "limitations": [],
+    }),
+        "aggression_fight",
+    ) == "contradicted"
+
+    fire = VisualObservation.model_validate({
+        "outcome": "fire_smoke",
+        "summary": "Smoke-like evidence is visible.",
+        "observations": [
+            {"predicate": "smoke_like_region", "supported": True, "frame_indices": [0]},
+            {"predicate": "scene_visibility", "supported": True, "frame_indices": [0]},
+        ],
+        "limitations": [],
+    })
+    assert verification_verdict(fire, "fire_smoke") == "supported"
+    assert verification_verdict(VisualObservation.model_validate({
+        "outcome": "fire_smoke",
+        "summary": fire.summary,
+        "observations": [
+            {"predicate": "scene_visibility", "supported": True, "frame_indices": [0]},
+        ],
+        "limitations": [],
+    }),
+        "fire_smoke",
+    ) == "insufficient_evidence"
+    assert verification_verdict(VisualObservation.model_validate({
+        "outcome": "fire_smoke",
+        "summary": "No flame is visible, but smoke evidence is unclear.",
+        "observations": [
+            {"predicate": "flame_like_region", "supported": False, "frame_indices": [0]},
+            {"predicate": "scene_visibility", "supported": True, "frame_indices": [0]},
+        ],
+        "limitations": [],
+    }), "fire_smoke") == "insufficient_evidence"
+
+    intrusion = VisualObservation.model_validate({
+        "outcome": "intrusion_unauthorized_access",
+        "summary": "A person crosses a visible restricted boundary.",
+        "observations": [
+            {"predicate": "restricted_boundary_crossing", "supported": True, "frame_indices": [1]},
+            {"predicate": "scene_visibility", "supported": True, "frame_indices": [1]},
+        ],
+        "limitations": ["Authorization requires external policy evidence."],
+    })
+    assert verification_verdict(intrusion, "intrusion_unauthorized_access") == "supported"
+
+
+def test_none_and_unknown_remain_distinct_for_expanded_contract() -> None:
+    none = VisualObservation(
+        outcome="none", summary="Visible normal scene.", observations=[], limitations=[]
+    )
+    unknown = VisualObservation(
+        outcome="unknown", summary="The view is obstructed.", observations=[], limitations=[]
+    )
+    assert verification_verdict(none, "aggression_fight") == "contradicted"
+    assert verification_verdict(unknown, "aggression_fight") == "inconclusive"
+
+
 def test_semantic_service_runs_one_bounded_background_worker(tmp_path) -> None:
     paths = []
     for index in range(4):
