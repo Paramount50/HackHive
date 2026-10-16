@@ -1,0 +1,20 @@
+{
+  "measured_at": "2026-10-16T01:19:50.867017+00:00",
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "gpus": [
+    {
+      "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+      "total_mib": 6144,
+      "free_mib": 4404,
+      "used_mib": 1591,
+      "driver": "591.74",
+      "provisional_budget_mib": 3380
+    }
+  ],
+  "ram": {
+    "total_mib": 16236,
+    "available_mib": 4017,
+    "load_percent": 75
+  }
+}

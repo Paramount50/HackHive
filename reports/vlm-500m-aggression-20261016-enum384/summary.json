@@ -1,0 +1,32 @@
+{
+  "mode": "candidate_verification",
+  "variant": "500m",
+  "model_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+  "revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
+  "candidate_category": "aggression_fight",
+  "requested": 3,
+  "attempted": 3,
+  "valid_outputs": 2,
+  "failed_outputs": 1,
+  "valid_output_rate": 0.6666666666666666,
+  "outcome_counts": {
+    "aggression_fight": 2
+  },
+  "verification_verdict_counts": {
+    "contradicted": 2
+  },
+  "predicate_count_distribution": {
+    "4": 2
+  },
+  "unknown_outputs": 0,
+  "quality_validated": false,
+  "request_ms_p50": 12392.884000000777,
+  "request_ms_p95": 15930.116000003181,
+  "peak_allocated_mib": 1106.52,
+  "limitations": [
+    "Unlabelled footage; no accuracy or recall claim.",
+    "Offline sampled windows; not real-time latency or a baseline/cascade comparison.",
+    "Warm-up excluded; malformed responses counted as failures.",
+    "PTS estimated from frame index and declared FPS; verify variable-frame-rate sources separately."
+  ]
+}

@@ -129,7 +129,7 @@ SHA256 digests. The sharded 2.2B checkpoint is downloaded with
 The CUDA wheel is retained under `data/wheels/` for offline reinstall; model weights
 stay under `models/`. Both are excluded from Git.
 
-Generation uses local JSON-constrained decoding and a 256-token ceiling, followed
+Generation uses local JSON-constrained decoding and a 384-token ceiling, followed
 by independent semantic validation. `--unconstrained` enables a diagnostic comparison.
 Prompt-only pilots failed formatting; constrained pilots returned valid JSON but
 abstained (`unknown`). Valid JSON is not detection accuracy, and this model configuration

@@ -312,6 +312,23 @@ copies are not currently persisted. Verification: `python -m pytest -q`
 completed with 140 passed and two dependency/deprecation warnings; the Vite
 production build completed successfully.
 
+Local candidate-output hardening — 2026-10-16: a fresh RTX 3060 500M
+aggression smoke showed that hiding source PTS alone was insufficient: the
+initial run produced 1/3 valid measured outputs, with invalid large/negative
+frame references and two 256-token truncations. Frame indices are now generated
+from the explicit enum `0,1,2,3`, the bounded ceiling is 384 tokens, and candidate
+schemas correctly remove the unused `observations` property. An intermediate
+run reached 2/3 and exposed that stray-property schema defect. The final identical
+three-request run produced 3/3 structurally valid outputs, all four predicates
+per request, local frame indices only, no max-token hits, 12.250 s median,
+15.483 s p95 and 1106.52 MiB peak PyTorch allocation. All three deterministic
+verdicts were `contradicted`; sources are unlabelled, so this is not an accuracy
+result. Raw artifacts are in `reports/vlm-20261016T011647Z`,
+`reports/vlm-500m-aggression-20261016-enum384` and
+`reports/vlm-500m-aggression-20261016-schemafix`. The required 2.2B Kaggle
+rerun and RTX 3060 2.2B+XCLIP co-residency measurement remain pending because
+the local checkout contains only the 500M model.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

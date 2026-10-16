@@ -52,13 +52,14 @@ def test_candidate_schema_is_fixed_to_the_expected_category():
     assert len(alternatives) == 1
     assert alternatives[0]["properties"]["outcome"]["enum"] == ["aggression_fight"]
     assert "intrusion_unauthorized_access" not in str(alternatives[0])
+    assert "observations" not in alternatives[0]["properties"]
     assert set(alternatives[0]["properties"]["evidence"]["required"]) == {
         "multiple_people_visible", "physical_contact", "aggressive_motion",
         "temporal_persistence",
     }
     assert alternatives[0]["properties"]["evidence_frames"]["properties"][
         "physical_contact"
-    ]["items"]["maximum"] == 3
+    ]["items"]["enum"] == [0, 1, 2, 3]
 
 
 def test_candidate_parser_requires_every_predicate_and_preserves_null():

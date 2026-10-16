@@ -275,7 +275,7 @@ def generation_schema(candidate_outcome: str | None = None) -> dict:
             frame_properties = {
                 predicate: {
                     "type": "array", "minItems": 1, "maxItems": 4,
-                    "items": {"type": "integer", "minimum": 0, "maximum": 3},
+                    "items": {"type": "integer", "enum": [0, 1, 2, 3]},
                 } for predicate in sorted(predicates - {"access_mismatch"})
             }
             schema["properties"]["evidence"] = {
@@ -289,7 +289,7 @@ def generation_schema(candidate_outcome: str | None = None) -> dict:
             schema["required"] = [
                 "outcome", "summary", "evidence", "evidence_frames", "limitations"
             ]
-            schema.pop("observations", None)
+            schema["properties"].pop("observations", None)
             schema.pop("$defs", None)
             alternatives.append(schema)
             continue
@@ -298,7 +298,7 @@ def generation_schema(candidate_outcome: str | None = None) -> dict:
         observation = schema.pop("$defs")["Observation"]
         observation["properties"]["predicate"] = {"type": "string", "enum": allowed or ["unused"]}
         observation["properties"]["frame_indices"]["items"] = {
-            "type": "integer", "minimum": 0, "maximum": 3}
+            "type": "integer", "enum": [0, 1, 2, 3]}
         schema["properties"]["observations"] = {
             "type": "array", "maxItems": 2 if allowed else 0,
             "items": observation}

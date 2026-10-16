@@ -62,7 +62,7 @@ def main():
     parser.add_argument("--requests", type=int, default=20)
     parser.add_argument("--window-manifest", type=Path,
                         help="JSON manifest of source/fraction windows shared across variant runs")
-    parser.add_argument("--max-new-tokens", type=int, default=256)
+    parser.add_argument("--max-new-tokens", type=int, default=384)
     parser.add_argument("--unconstrained", action="store_true", help="Diagnostic prompt-only comparison")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

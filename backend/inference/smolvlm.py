@@ -117,10 +117,10 @@ def vision_sampling_compatibility(model) -> tuple[bool, str | None]:
 
 class SmolVLMWorker:
     def __init__(self, model_dir: str | Path | None = None, *, variant: str | None = None,
-                 max_new_tokens: int = 256, reserve_mib: int = 1024,
+                 max_new_tokens: int = 384, reserve_mib: int = 1024,
                  constrained: bool = True):
-        if not 32 <= max_new_tokens <= 256:
-            raise ValueError("max_new_tokens must be between 32 and 256")
+        if not 32 <= max_new_tokens <= 384:
+            raise ValueError("max_new_tokens must be between 32 and 384")
         self.config = model_config(variant)
         self.model_dir = Path(model_dir or self.config.default_dir).resolve()
         self.max_new_tokens = max_new_tokens
