@@ -5,7 +5,7 @@ import numpy as np
 
 from backend.contracts import FixtureAnalysis, MediaStatus, QueryIntent
 from backend.ingest.replay import FramePacket
-from backend.media import MediaExporter
+from backend.media import MediaExporter, transcode_legacy_mp4_clip
 from backend.storage import Store
 
 
@@ -31,6 +31,8 @@ def test_media_export_is_atomic_and_records_actual_coverage(tmp_path) -> None:
     assert keyframe.byte_size > 0 and len(keyframe.sha256) == 64
     clip_path = exporter.root / clip.relative_path
     assert clip_path.is_file() and clip.byte_size > 0
+    assert clip_path.suffix == ".webm"
+    assert clip.mime_type == "video/webm"
     assert clip.coverage_start_utc_ms == 10_000
     assert clip.coverage_end_utc_ms == 12_000
     capture = cv2.VideoCapture(str(clip_path))
@@ -38,6 +40,31 @@ def test_media_export_is_atomic_and_records_actual_coverage(tmp_path) -> None:
     assert int(capture.get(cv2.CAP_PROP_FRAME_COUNT)) == 5
     capture.release()
     assert not list((exporter.root / "event-1").glob("*.tmp*"))
+
+
+def test_legacy_mp4_clip_is_transcoded_to_browser_playable_webm(tmp_path) -> None:
+    legacy = tmp_path / "legacy.mp4"
+    writer = cv2.VideoWriter(
+        str(legacy), cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (64, 48)
+    )
+    assert writer.isOpened()
+    for index in range(8):
+        writer.write(np.full((48, 64, 3), index * 20, dtype=np.uint8))
+    writer.release()
+
+    converted, size, digest = transcode_legacy_mp4_clip(legacy)
+
+    assert converted.suffix == ".webm"
+    assert converted.read_bytes().startswith(bytes.fromhex("1a45dfa3"))
+    assert size == converted.stat().st_size and size > 0
+    assert len(digest) == 64
+    capture = cv2.VideoCapture(str(converted))
+    assert capture.isOpened()
+    decoded = 0
+    while capture.read()[0]:
+        decoded += 1
+    capture.release()
+    assert decoded == 8
 
 
 def test_ready_artifact_and_missing_fixture_have_distinct_states(tmp_path) -> None:

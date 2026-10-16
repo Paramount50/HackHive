@@ -72,9 +72,13 @@ const readableFilters = (filters, timezone) => [
 const displayVerification = (verification) => {
   const value = verificationLabels[verification?.verdict ?? verification?.status] ?? titleCase(verification?.status ?? "not_run");
   return verification?.verdict || ["pending", "running", "completed", "rejected", "failed", "expired"].includes(verification?.status)
-    ? `VLM · ${value}`
+    ? `VLM assessment · ${value}`
     : value;
 };
+const needsPriorityReview = (event) => [
+  "contradicted", "inconclusive", "insufficient_evidence", "category_conflict"
+].includes(event.verification?.verdict)
+  || ["failed", "expired", "not_configured"].includes(event.verification?.status);
 const evidenceAvailability = (event) => [event.has_keyframe && "Keyframe", event.has_clip && "Sampled evidence clip"].filter(Boolean).join(" · ") || "Unavailable";
 
 async function request(path, options) {
@@ -90,10 +94,10 @@ function StatusBar({ status }) {
   return (
     <section className="status-bar panel">
       <div><span className="eyebrow">YOLO</span><strong className={analysis?.detector_ready ? "healthy" : "warning"}>{analysis?.detector_ready ? "Runtime ready" : "Unavailable"}</strong><span className="metadata">{analysis?.detector_weights ?? "No local weights"}</span></div>
-      <div><span className="eyebrow">XCLIP</span><strong className={analysis?.action_model_ready ? "healthy" : "warning"}>{analysis?.action_model_ready ? "Runtime ready" : "Unavailable"}</strong><span className="metadata">Action ranking · uncalibrated</span></div>
-      <div><span className="eyebrow">SMOLVLM</span><strong className={vlm?.state === "ready" ? "healthy" : "warning"}>{titleCase(vlm?.state ?? "loading")}</strong><span className="metadata">{vlm?.variant ?? "—"} · queue {vlm?.pending ?? 0}/{vlm?.capacity ?? 3}</span></div>
+      <div><span className="eyebrow">XCLIP</span><strong className={analysis?.action_model_ready ? "healthy" : "warning"}>{analysis?.action_model_ready ? "Runtime ready" : "Unavailable"}</strong><span className="metadata">Action ranking</span></div>
+      <div><span className="eyebrow">SMOLVLM</span><strong className={vlm?.state === "ready" ? "healthy" : "warning"}>{titleCase(vlm?.state ?? "loading")}</strong><span className="metadata">{vlm?.variant ?? "—"} · {vlm?.pending ?? 0} queued · max {vlm?.capacity ?? 3}</span></div>
       <div><span className="eyebrow">SAMPLING</span><strong>{titleCase(vlm?.selection_strategy ?? "swift")}</strong><span className="metadata">Four-frame verification budget</span></div>
-      <div><span className="eyebrow">CHAT</span><strong className={query?.state === "ready" ? "healthy" : "warning"}>{titleCase(query?.state ?? "loading")}</strong><span className="metadata">{query?.semantic_models_state === "ready" ? `Qwen + MiniLM · ${query?.device ?? "CPU"}` : `Structured search · semantic models ${titleCase(query?.semantic_models_state ?? "loading")}`}</span></div>
+      <div><span className="eyebrow">CHAT</span><strong className={query?.state === "ready" ? "healthy" : "warning"}>{titleCase(query?.state ?? "loading")}</strong><span className="metadata">{query?.semantic_models_state === "ready" ? `Qwen + MiniLM · ${query?.device ?? "CPU"}` : "Structured search available"}</span></div>
     </section>
   );
 }
@@ -101,7 +105,6 @@ function StatusBar({ status }) {
 function ReplayControl({ job, onJob, onError }) {
   const [sourceName, setSourceName] = useState("");
   const [sampleFps, setSampleFps] = useState(5);
-  const [decodeStrategy, setDecodeStrategy] = useState("sequential");
   const [gateLineY, setGateLineY] = useState("");
   const [zone, setZone] = useState([0, 0, 100, 100]);
   const [uploadFile, setUploadFile] = useState(null);
@@ -136,7 +139,7 @@ function ReplayControl({ job, onJob, onError }) {
         body: JSON.stringify({
           source_name: sourceName,
           sample_fps: Number(sampleFps),
-          decode_strategy: decodeStrategy,
+          decode_strategy: "sequential",
           pace: true,
           ...(gateLineY === "" ? {} : { gate_line_y: Number(gateLineY) / 100 }),
           zone: zone.map((value) => Number(value) / 100)
@@ -177,14 +180,14 @@ function ReplayControl({ job, onJob, onError }) {
         <div><span className="eyebrow">2 / ANALYZE</span><strong>Configure the uploaded recording</strong></div>
         <label>Recording<select value={sourceName} onChange={(event) => setSourceName(event.target.value)} required><option value="">Choose a recording</option>{recordings.map((recording) => <option key={recording.recording_id} value={recording.stored_name}>{recording.original_name} · {(recording.duration_ms / 1000).toFixed(1)}s</option>)}</select></label>
         <label>Sample FPS<input type="number" min="0.5" max="10" step="0.5" value={sampleFps} onChange={(event) => setSampleFps(event.target.value)} /></label>
-        <label>Decoder<select value={decodeStrategy} onChange={(event) => setDecodeStrategy(event.target.value)}><option value="sequential">Sequential baseline</option><option value="grab">Grab/retrieve trial</option></select></label>
         <label>Gate line from top (%)<input type="number" min="0" max="100" placeholder="optional" value={gateLineY} onChange={(event) => setGateLineY(event.target.value)} /></label>
         {zone.map((value, index) => <label key={index}>Zone {["left", "top", "right", "bottom"][index]} (%)<input type="number" min="0" max="100" value={value} onChange={(event) => setZone((current) => current.map((item, position) => position === index ? event.target.value : item))} /></label>)}
+        <p className="metadata replay-help">The zone is a rectangle in the image, ordered left, top, right, bottom. Each value is a percentage; 0, 0, 100, 100 means the whole frame. Crowd rules count people whose detected centers are inside it. The gate line is a separate crossing boundary.</p>
         <button type="submit" disabled={!sourceName || (job && !terminalReplayStates.has(job.status))}>Start analysis</button>
         {job && !terminalReplayStates.has(job.status) && <button type="button" className="secondary" onClick={stop}>Stop</button>}
       </form>
       {job && <div className="replay-progress">
-        <div><span className={`job-state ${job.status}`}>{job.status}</span><strong>{job.frame_count} sampled frame(s) · {job.analysis}</strong><span className="metadata">{job.source_name} · {job.decode_strategy} decoder</span></div>
+        <div><span className={`job-state ${job.status}`}>{job.status}</span><strong>{job.frame_count} sampled frame(s) · {job.analysis}</strong><span className="metadata">{job.source_name}</span></div>
         {job.latest_frame && <img src={`${job.latest_frame.frame_url}?v=${job.frame_count}`} alt="Latest sampled replay frame" />}
         {job.analysis_message && <span className="metadata">{job.analysis_message}</span>}
         {job.error && <span className="error-text">{job.error}</span>}
@@ -298,7 +301,7 @@ function EvidenceSummary({ event }) {
   const startOffset = hasVideoOffset(event) ? event.start_pts_ms : null;
   const duration = Number.isFinite(startOffset) ? Math.max(0, endOffset - startOffset) : null;
   const recording = event.recording_original_name ?? event.source_name ?? "Recording source unavailable";
-  const review = event.review_status === "unreviewed" ? "Review required" : `Human review · ${titleCase(event.review_status)}`;
+  const review = event.review_status === "unreviewed" ? "Human review required" : `Human review · ${titleCase(event.review_status)}`;
   return (
     <div className="evidence-summary">
       {event.thumbnail_media_id
@@ -316,6 +319,7 @@ function EvidenceSummary({ event }) {
             : "Video offset unavailable"}
         </span></div>
         <div className="evidence-badges"><span>{review}</span><span>Candidate · {event.candidate?.source ?? "Source unknown"}</span></div>
+        {needsPriorityReview(event) && <span className="priority-review-badge">Priority manual review · {displayVerification(event.verification)}</span>}
         {event.session_mode === "replay" && <small className="metadata">Replay timestamp {formatTime(event.start_utc_ms)} · original capture time unknown</small>}
         {event.semantic_score != null && <small className="metadata">Semantic match · {Math.round(event.semantic_score * 100)}%</small>}
         <small className="metadata">Event {event.event_id}</small>
@@ -513,6 +517,7 @@ function App() {
             </div>
           </div>
           <p className="metadata">{message}</p>
+          {reviewStatus === "unreviewed" && <p className="review-priority-note">Priority order: VLM contradictions, inconclusive results, and verification failures first. VLM support is an assessment, not a human review.</p>}
           {events.map((event) => <EventCard key={event.event_id} event={event} selected={selected?.event_id === event.event_id} onSelect={selectEvent} onReview={review} />)}
           {events.length < eventTotal && <button className="secondary load-more" onClick={() => loadEvents(true)}>Load more incidents</button>}
           {!events.length && <div className="empty-state">No matching recorded incidents.</div>}

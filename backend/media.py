@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import shutil
 import uuid
@@ -83,12 +84,12 @@ class MediaExporter:
         fps = min(30.0, max(1.0, (len(selected) - 1) / duration_seconds))
         directory = self.root / event_id
         directory.mkdir(parents=True, exist_ok=True)
-        name = f"{uuid.uuid4()}.mp4"
+        name = f"{uuid.uuid4()}.webm"
         destination = directory / name
-        temporary = directory / f".{name}.tmp.mp4"
-        writer = cv2.VideoWriter(str(temporary), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+        temporary = directory / f".{name}.tmp.webm"
+        writer = cv2.VideoWriter(str(temporary), cv2.VideoWriter_fourcc(*"VP90"), fps, (width, height))
         if not writer.isOpened():
-            raise RuntimeError("OpenCV MP4 writer is unavailable")
+            raise RuntimeError("OpenCV VP9/WebM writer is unavailable")
         try:
             for packet in selected:
                 frame = cv2.imread(packet.asset_id)
@@ -99,12 +100,23 @@ class MediaExporter:
                 writer.write(frame)
         finally:
             writer.release()
+        if not temporary.is_file() or temporary.stat().st_size == 0:
+            temporary.unlink(missing_ok=True)
+            raise RuntimeError("VP9/WebM clip export produced no playable data")
         os.replace(temporary, destination)
+        validation = cv2.VideoCapture(str(destination))
+        try:
+            ok, _ = validation.read()
+            if not ok:
+                destination.unlink(missing_ok=True)
+                raise RuntimeError("exported incident clip failed playback verification")
+        finally:
+            validation.release()
         size, digest = self._digest(destination)
         return MediaArtifact(
             kind="event_clip",
             relative_path=destination.relative_to(self.root).as_posix(),
-            mime_type="video/mp4",
+            mime_type="video/webm",
             coverage_start_utc_ms=selected[0].captured_utc_ms,
             coverage_end_utc_ms=selected[-1].captured_utc_ms,
             requested_start_utc_ms=requested_start_utc_ms,
@@ -112,3 +124,59 @@ class MediaExporter:
             byte_size=size,
             sha256=digest,
         )
+
+
+def transcode_legacy_mp4_clip(source: str | Path) -> tuple[Path, int, str]:
+    source_path = Path(source).resolve()
+    if not source_path.is_file():
+        raise FileNotFoundError(f"legacy incident clip is missing: {source_path}")
+    import cv2
+
+    capture = cv2.VideoCapture(str(source_path))
+    if not capture.isOpened():
+        capture.release()
+        raise RuntimeError("legacy incident clip cannot be decoded")
+    fps = float(capture.get(cv2.CAP_PROP_FPS))
+    if not math.isfinite(fps) or fps <= 0 or fps > 120:
+        fps = 10.0
+    width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    if width <= 0 or height <= 0:
+        capture.release()
+        raise RuntimeError("legacy incident clip has invalid dimensions")
+
+    destination = source_path.with_name(f"{source_path.stem}-{uuid.uuid4().hex}.webm")
+    temporary = destination.with_name(f".{destination.name}.tmp.webm")
+    writer = cv2.VideoWriter(
+        str(temporary), cv2.VideoWriter_fourcc(*"VP90"), fps, (width, height)
+    )
+    if not writer.isOpened():
+        capture.release()
+        raise RuntimeError("OpenCV VP9/WebM writer is unavailable for legacy clip conversion")
+    frames_written = 0
+    try:
+        while True:
+            ok, frame = capture.read()
+            if not ok:
+                break
+            if frame.shape[1] != width or frame.shape[0] != height:
+                frame = cv2.resize(frame, (width, height))
+            writer.write(frame)
+            frames_written += 1
+    finally:
+        capture.release()
+        writer.release()
+    if frames_written == 0 or not temporary.is_file() or temporary.stat().st_size == 0:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError("legacy incident clip conversion produced no playable frames")
+    os.replace(temporary, destination)
+    converted = cv2.VideoCapture(str(destination))
+    try:
+        ok, _ = converted.read()
+        if not ok:
+            destination.unlink(missing_ok=True)
+            raise RuntimeError("converted incident clip failed playback verification")
+    finally:
+        converted.release()
+    size, digest = MediaExporter._digest(destination)
+    return destination, size, digest

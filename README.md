@@ -318,11 +318,17 @@ replay times, not original CCTV capture times. Replay events retain a video offs
 even if the recording filename was not associated with that session; the source is
 then shown as unavailable. Exact totals and readable filters are
 shown separately from semantic retrieval's bounded candidate scan.
+New evidence clips use VP9/WebM for browser playback; older MP4 event clips are
+converted to WebM on first playback and retain their media IDs and coverage metadata.
 
 VLM confirmation remains advisory and requires human review; webcam/RTSP input and
 validated event accuracy are still incomplete. A model ranking on any supplied clip
 is a pilot observation only. The six clips have provisional labels and no held-out
 camera coverage.
+
+The unreviewed timeline keeps every candidate in the operator queue, but puts VLM
+contradictions, inconclusive/insufficient results, and verification failures first.
+VLM support is an advisory model assessment, not a human review decision.
 
 ## Label the supplied videos before evaluating
 

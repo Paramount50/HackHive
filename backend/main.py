@@ -14,7 +14,7 @@ from .contracts import Category, FixtureAnalysis, NaturalQueryRequest, QueryInte
 from .ingest.manager import ReplayManager
 from .inference.service import SemanticInferenceService, SemanticJob
 from .inference.smolvlm import SmolVLMWorker, model_config
-from .media import MediaExporter
+from .media import MediaExporter, transcode_legacy_mp4_clip
 from .orchestrator import EventOrchestrator
 from .perception.action import XClipActionClassifier
 from .perception.pipeline import PerceptionPipeline, ScenePolicy, YoloDetector
@@ -54,6 +54,7 @@ if chat_device not in {"cpu", "cuda"}:
 chat_model: Qwen3LocalModel | None = None
 semantic_ranker: SemanticRanker | None = None
 query_models_lock = Lock()
+media_conversion_lock = Lock()
 
 
 def get_action_classifier() -> XClipActionClassifier | None:
@@ -437,6 +438,32 @@ def media(media_id: str) -> FileResponse:
     path = (media_root / item["relative_path"]).resolve()
     if not path.is_relative_to(media_root) or not path.is_file():
         raise HTTPException(status_code=404, detail="media file is unavailable")
+    if item["kind"] == "event_clip" and item["mime_type"] == "video/mp4":
+        with media_conversion_lock:
+            item = store.get_media(media_id)
+            if item is None or item["status"] != "ready":
+                raise HTTPException(status_code=409, detail="event clip is no longer ready")
+            path = (media_root / item["relative_path"]).resolve()
+            if not path.is_relative_to(media_root) or not path.is_file():
+                raise HTTPException(status_code=404, detail="media file is unavailable")
+            if item["mime_type"] == "video/mp4":
+                try:
+                    converted, size, digest = transcode_legacy_mp4_clip(path)
+                except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+                    raise HTTPException(
+                        status_code=500, detail=f"could not prepare incident clip for browser playback: {exc}"
+                    ) from exc
+                store.update_media_representation(
+                    media_id,
+                    relative_path=converted.relative_to(media_root).as_posix(),
+                    mime_type="video/webm",
+                    byte_size=size,
+                    sha256=digest,
+                )
+                item = store.get_media(media_id)
+                if item is None:
+                    raise HTTPException(status_code=404, detail="converted media not found")
+                path = converted
     return FileResponse(path, media_type=item["mime_type"])
 
 

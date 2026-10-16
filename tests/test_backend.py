@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from time import monotonic, sleep
 
@@ -8,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.contracts import FixtureAnalysis, QueryIntent, ReplayStartRequest, ReviewRequest
+from backend.media import MediaArtifact
 from backend.storage import Store
 from backend.ingest.manager import ReplayManager
 from backend.ingest.replay import BoundedFrameBuffer, FixtureReplay, FramePacket, VideoReplay
@@ -123,6 +125,50 @@ def test_review_action_changes_use_distinct_idempotency_keys() -> None:
             event_id,
             ReviewRequest(action="reject", actor_label="tester", request_key="cycle-confirm-1"),
         )
+
+
+def test_unreviewed_list_prioritizes_uncertain_vlm_results() -> None:
+    store = make_store()
+    session = store.create_session(1_000)
+    analysis = FixtureAnalysis(
+        outcome="person_down", summary="A person is visible.",
+        observations=[{"predicate": "visible_person", "supported": True}],
+    )
+    supported = store.record_analysis(session, 5_000, 5_500, analysis, "priority-supported")
+    inconclusive = store.record_analysis(session, 3_000, 3_500, analysis, "priority-inconclusive")
+    contradicted = store.record_analysis(session, 2_000, 2_500, analysis, "priority-contradicted")
+
+    for event_id, verdict in (
+        (supported, "supported"),
+        (inconclusive, "inconclusive"),
+        (contradicted, "contradicted"),
+    ):
+        row = store.get_event_row(event_id)
+        window_id = f"vlm-{event_id}"
+        store.connection.execute(
+            """INSERT INTO analysis_windows
+               (window_id,session_id,start_utc_ms,end_utc_ms,frame_count,reason,status,
+                model_outcome,model_id,model_revision,prompt_version,observations_json,timings_json)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                window_id, session, 2_000, 3_000, 4, "vlm_verification", "completed",
+                "person_down", "fixture://vlm", "v1", "test",
+                json.dumps({"verdict": verdict}), "{}",
+            ),
+        )
+        window_ids = json.loads(row["window_ids_json"])
+        window_ids.append(window_id)
+        store.connection.execute(
+            "UPDATE events SET window_ids_json=? WHERE event_id=?",
+            (json.dumps(window_ids), event_id),
+        )
+    store.connection.commit()
+
+    ordered = store.list_events(QueryIntent(review_statuses=["unreviewed"]))
+    assert [event["event_id"] for event in ordered[:2]] == [inconclusive, contradicted]
+    assert ordered[2]["event_id"] == supported
+    recent_first = store.list_events(QueryIntent())
+    assert [event["event_id"] for event in recent_first] == [supported, inconclusive, contradicted]
 
 
 def test_source_offsets_filter_by_recording_and_report_durable_source_name() -> None:
@@ -269,6 +315,59 @@ def test_api_fixture_and_citations() -> None:
         query = client.post("/api/query", json={"operation": "list"})
         assert query.status_code == 200
         assert query.json()["citations"]
+
+
+def test_media_api_transcodes_legacy_mp4_clip_for_browser(tmp_path, monkeypatch) -> None:
+    import cv2
+    import numpy as np
+    from backend import main
+
+    media_root = (tmp_path / "media").resolve()
+    relative_path = Path("events") / "event" / "legacy.mp4"
+    clip_path = media_root / relative_path
+    clip_path.parent.mkdir(parents=True)
+    writer = cv2.VideoWriter(
+        str(clip_path), cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (64, 48)
+    )
+    assert writer.isOpened()
+    for index in range(8):
+        writer.write(np.full((48, 64, 3), index * 20, dtype=np.uint8))
+    writer.release()
+
+    store = Store(media_root=media_root)
+    store.seed_camera()
+    session = store.create_session(1_000)
+    event_id = store.record_analysis(
+        session, 2_000, 3_000,
+        FixtureAnalysis(outcome="person_down", summary="Person prone."),
+        "legacy-media-event",
+    )
+    artifact = MediaArtifact(
+        kind="event_clip", relative_path=relative_path.as_posix(), mime_type="video/mp4",
+        coverage_start_utc_ms=1_000, coverage_end_utc_ms=2_000,
+        requested_start_utc_ms=1_000, requested_end_utc_ms=3_000,
+        byte_size=clip_path.stat().st_size,
+        sha256=hashlib.sha256(clip_path.read_bytes()).hexdigest(),
+    )
+    media_id = store.add_media_artifact(event_id, artifact)
+    store.connection.execute(
+        "UPDATE media SET status='missing',failure_reason='recorded missing before file recheck' WHERE media_id=?",
+        (media_id,),
+    )
+    store.connection.commit()
+    monkeypatch.setattr(main, "store", store)
+    monkeypatch.setattr(main, "media_root", media_root)
+
+    with TestClient(main.app) as client:
+        response = client.get(f"/api/media/{media_id}", headers={"Range": "bytes=0-1023"})
+
+    assert response.status_code == 206
+    assert response.headers["content-type"] == "video/webm"
+    assert response.content.startswith(bytes.fromhex("1a45dfa3"))
+    assert response.headers["content-range"].startswith("bytes 0-")
+    updated = store.get_media(media_id)
+    assert updated["mime_type"] == "video/webm"
+    assert updated["relative_path"].endswith(".webm")
 
 
 def test_chat_status_reports_structured_search_ready_without_optional_models(tmp_path, monkeypatch) -> None:

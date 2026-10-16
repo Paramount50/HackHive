@@ -48,6 +48,7 @@ button:hover { filter: brightness(1.08); } button.danger { background: #7f1d1d; 
 dt { color: #8da1bb; font-size: 12px; margin-top: 10px; } dd { margin: 2px 0 0; }
 .error { color: #fecaca; border-color: #991b1b; margin-top: 16px; } footer { margin-top: 20px; }
 .replay-control { margin-top: 16px; } .replay-control form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.replay-help { flex-basis: 100%; margin: 0; }
 .upload-row { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid #263650; padding-bottom: 16px; margin-bottom: 16px; }
 .upload-row > div:first-child { display: grid; gap: 4px; margin-right: auto; } .upload-row input[type="file"] { max-width: 360px; }
 .replay-control label { display: grid; gap: 5px; color: #8da1bb; font-size: 12px; } .replay-control label:first-of-type { flex: 1; min-width: 220px; }
@@ -70,6 +71,8 @@ button.suggestion { min-height: 32px; background: #172943; color: #bfdbfe; borde
 .source-interval span { color: #bfdbfe; font-variant-numeric: tabular-nums; }
 .evidence-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .evidence-badges span { border: 1px solid #45617d; border-radius: 999px; padding: 3px 8px; color: #cbd5e1; font-size: 11px; }
+.priority-review-badge { display: inline-block; width: fit-content; border: 1px solid #b45309; border-radius: 999px; padding: 4px 9px; color: #fde68a; background: #422006; font-size: 11px; font-weight: 700; }
+.review-priority-note { margin: -4px 0 12px; color: #fde68a; font-size: 12px; }
 .query-result-card { display: grid; gap: 10px; border: 1px solid #263650; background: #0d1727; border-radius: 9px; padding: 12px; }
 .query-result-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .query-result-actions .secondary { background: transparent; color: #bfdbfe; }

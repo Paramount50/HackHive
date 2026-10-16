@@ -220,7 +220,8 @@ class HybridQueryEngine:
                 "operation": "list",
                 "limit": plan.intent.limit if structured_page else 100,
                 "offset": plan.intent.offset if structured_page else 0,
-            })
+            }),
+            supported_first=structured_page and not aggregate_query,
         )
         retrieval_mode = "structured" if aggregate_query else plan.retrieval_mode
         semantic_scores: dict[str, float] = {}
@@ -257,6 +258,9 @@ class HybridQueryEngine:
                         merged = {**event, **resolved, "semantic_score": round(score, 4)}
                         result.append(merged)
                         semantic_scores[event["event_id"]] = round(score, 4)
+                    result.sort(
+                        key=lambda event: event.get("verification", {}).get("verdict") != "supported"
+                    )
         else:
             result = candidates if structured_page else candidates[: plan.intent.limit]
 

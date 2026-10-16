@@ -178,7 +178,7 @@ class Store:
     def _mark_missing_media(self, event_id: str | None = None, media_id: str | None = None) -> None:
         if self.media_root is None:
             return
-        sql = "SELECT media_id,relative_path FROM media WHERE status='ready'"
+        sql = "SELECT media_id,relative_path,status FROM media WHERE status IN ('ready','missing')"
         params: list[str] = []
         if event_id is not None:
             sql += " AND event_id=?"
@@ -187,18 +187,29 @@ class Store:
             sql += " AND media_id=?"
             params.append(media_id)
         missing_ids = []
+        restored_ids = []
         for row in self.connection.execute(sql, params).fetchall():
             path = (self.media_root / row["relative_path"]).resolve()
-            if not path.is_relative_to(self.media_root) or not path.is_file():
+            exists = path.is_relative_to(self.media_root) and path.is_file()
+            if not exists and row["status"] == "ready":
                 missing_ids.append(row["media_id"])
-        if missing_ids:
+            elif exists and row["status"] == "missing":
+                restored_ids.append(row["media_id"])
+        if missing_ids or restored_ids:
             with self.connection:
-                self.connection.executemany(
-                    """UPDATE media SET status='missing',
-                       failure_reason='artifact file is missing from local media storage'
-                       WHERE media_id=? AND status='ready'""",
-                    ((media_id,) for media_id in missing_ids),
-                )
+                if missing_ids:
+                    self.connection.executemany(
+                        """UPDATE media SET status='missing',
+                           failure_reason='artifact file is missing from local media storage'
+                           WHERE media_id=? AND status='ready'""",
+                        ((missing_id,) for missing_id in missing_ids),
+                    )
+                if restored_ids:
+                    self.connection.executemany(
+                        """UPDATE media SET status='ready',failure_reason=NULL
+                           WHERE media_id=? AND status='missing'""",
+                        ((restored_id,) for restored_id in restored_ids),
+                    )
 
     def close(self) -> None:
         self.connection.close()
@@ -765,6 +776,18 @@ class Store:
         row = self.connection.execute("SELECT * FROM media WHERE media_id=?", (media_id,)).fetchone()
         return dict(row) if row else None
 
+    def update_media_representation(
+        self, media_id: str, *, relative_path: str, mime_type: str, byte_size: int, sha256: str,
+    ) -> None:
+        with self.connection:
+            cursor = self.connection.execute(
+                """UPDATE media SET relative_path=?,mime_type=?,byte_size=?,sha256=?
+                   WHERE media_id=? AND status='ready'""",
+                (relative_path, mime_type, byte_size, sha256, media_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(f"ready media not found: {media_id}")
+
     def add_recording(self, metadata: dict[str, Any]) -> dict[str, Any]:
         self.connection.execute(
             """INSERT INTO recordings
@@ -912,7 +935,9 @@ class Store:
             params.append(intent.end_pts_ms)
         return sql, params
 
-    def list_events(self, intent: QueryIntent) -> list[dict[str, Any]]:
+    def list_events(
+        self, intent: QueryIntent, *, supported_first: bool = False
+    ) -> list[dict[str, Any]]:
         self._mark_missing_media()
         sql = """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode,
                  s.started_utc_ms AS session_started_utc_ms, s.source_name,
@@ -932,7 +957,40 @@ class Store:
                  LEFT JOIN recordings r ON r.recording_id=s.recording_id WHERE 1=1"""
         filters, params = self._event_filters(intent)
         sql += filters
-        sql += " ORDER BY e.start_utc_ms DESC"
+        if ReviewStatus.UNREVIEWED in intent.review_statuses:
+            latest_vlm = """(
+                SELECT aw.status || '|' || COALESCE(
+                    json_extract(aw.observations_json, '$.verdict'), ''
+                )
+                FROM analysis_windows aw
+                WHERE aw.reason='vlm_verification' AND aw.window_id IN (
+                    SELECT value FROM json_each(e.window_ids_json)
+                )
+                ORDER BY aw.rowid DESC LIMIT 1
+            )"""
+            sql += f""" ORDER BY
+                CASE
+                  WHEN {latest_vlm} IN (
+                    'completed|contradicted','completed|inconclusive',
+                    'completed|insufficient_evidence','completed|category_conflict',
+                    'failed|','expired|','not_configured|'
+                  ) THEN 0 ELSE 1
+                END,
+                e.start_utc_ms DESC"""
+        elif supported_first:
+            latest_verdict = """(
+                SELECT json_extract(aw.observations_json, '$.verdict')
+                FROM analysis_windows aw
+                WHERE aw.reason='vlm_verification' AND aw.window_id IN (
+                    SELECT value FROM json_each(e.window_ids_json)
+                )
+                ORDER BY aw.rowid DESC LIMIT 1
+            )"""
+            sql += f""" ORDER BY
+                CASE WHEN {latest_verdict}='supported' THEN 0 ELSE 1 END,
+                e.start_utc_ms DESC"""
+        else:
+            sql += " ORDER BY e.start_utc_ms DESC"
         if intent.operation == "list":
             sql += " LIMIT ? OFFSET ?"
             params.extend((intent.limit, intent.offset))

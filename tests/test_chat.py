@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
 import numpy as np
@@ -64,6 +65,56 @@ def test_structured_list_reports_exact_total_and_paginates() -> None:
         question="Group person down incidents by category", now_utc_ms=NOW
     ))
     assert grouped["answer"] == {"person_down": 105}
+
+
+def test_structured_query_lists_vlm_supported_events_before_other_results() -> None:
+    store = Store()
+    session = store.create_session(NOW - 100_000)
+    event_ids = []
+    for index, timestamp in enumerate((NOW - 10_000, NOW - 20_000, NOW - 30_000)):
+        event_id = store.record_analysis(
+            session, timestamp, timestamp + 1_000,
+            FixtureAnalysis(
+                outcome="person_down", summary=f"Person-down event {index}.",
+                observations=[{"predicate": "visible_person", "supported": True}],
+            ),
+            f"verification-order-{index}",
+        )
+        event_ids.append(event_id)
+        if index < 3:
+            row = store.get_event_row(event_id)
+            window_id = f"verification-order-vlm-{index}"
+            verdict = "failed" if index == 0 else "supported"
+            store.connection.execute(
+                """INSERT INTO analysis_windows
+                   (window_id,session_id,start_utc_ms,end_utc_ms,frame_count,reason,status,
+                    model_outcome,model_id,model_revision,prompt_version,observations_json,timings_json)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    window_id, session, timestamp, timestamp + 1_000, 4,
+                    "vlm_verification", "failed" if verdict == "failed" else "completed",
+                    "person_down", "fixture://vlm", "v1", "test",
+                    json.dumps({"verdict": None if verdict == "failed" else verdict}), "{}",
+                ),
+            )
+            window_ids = json.loads(row["window_ids_json"])
+            window_ids.append(window_id)
+            store.connection.execute(
+                "UPDATE events SET window_ids_json=? WHERE event_id=?",
+                (json.dumps(window_ids), event_id),
+            )
+    store.connection.commit()
+
+    engine = HybridQueryEngine(store)
+    first_page = engine.execute(NaturalQueryRequest(
+        question="Show person down incidents", now_utc_ms=NOW, limit=2,
+    ))
+    second_page = engine.execute(NaturalQueryRequest(
+        question="Show person down incidents", now_utc_ms=NOW, limit=2, offset=2,
+    ))
+
+    assert [event["event_id"] for event in first_page["events"]] == [event_ids[1], event_ids[2]]
+    assert [event["event_id"] for event in second_page["events"]] == [event_ids[0]]
 
 
 class KeywordEmbedder:
