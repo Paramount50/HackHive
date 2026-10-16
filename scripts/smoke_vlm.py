@@ -157,6 +157,14 @@ def main():
     valid = sum(item["status"] == "completed" for item in results)
     outcomes = Counter(item["observation"]["outcome"] for item in results
                        if item.get("observation") is not None)
+    verdicts = Counter(item["verification_verdict"] for item in results
+                       if item.get("verification_verdict"))
+    predicate_counts = Counter()
+    if args.candidate:
+        for item in results:
+            observation = item.get("observation")
+            if observation:
+                predicate_counts[len(observation.get("observations", []))] += 1
     timings = [item["timings_ms"]["total"] for item in results if "timings_ms" in item]
     summary = {"mode": "candidate_verification" if args.candidate else "offline_smoke",
                "variant": args.model, "model_id": config.model_id,
@@ -165,6 +173,8 @@ def main():
                "valid_outputs": valid, "failed_outputs": len(results)-valid,
                "valid_output_rate": valid/len(results) if results else None,
                "outcome_counts": dict(outcomes),
+               "verification_verdict_counts": dict(verdicts),
+               "predicate_count_distribution": dict(predicate_counts),
                "unknown_outputs": outcomes["unknown"],
                "quality_validated": False,
                "request_ms_p50": percentile(timings, .5), "request_ms_p95": percentile(timings, .95),

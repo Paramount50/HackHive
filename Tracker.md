@@ -218,6 +218,17 @@ diagnostics, observations, and deterministic verdict. Fire/smoke and restricted
 intrusion still require documented upstream candidate/policy coverage; the same
 fight windows require a fresh candidate-mode GPU rerun.
 
+Candidate evidence completeness follow-up — 2026-10-16: candidate mode now
+requires explicit true/false/null evidence and frame citations for every
+category predicate. For aggression this is
+`multiple_people_visible`, `physical_contact`, `aggressive_motion`, and
+`temporal_persistence`; the deterministic `supported` verdict still requires
+the first two to be true. Generic audit mode retains the optional observations
+list. Out-of-range frame references remain invalid and are never repaired. The
+checked-in workspace has earlier generic smoke reports but not the newer Kaggle
+candidate report, so the exact invalid generated index remains pending from
+that raw report.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

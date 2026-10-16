@@ -103,6 +103,71 @@ def parse_observation(raw: str, frame_count: int) -> VisualObservation:
     return value
 
 
+def parse_candidate_observation(
+    raw: str, frame_count: int, expected_outcome: str
+) -> VisualObservation:
+    """Parse the fixed per-predicate shape used by candidate verification."""
+    if expected_outcome not in REQUIRED_VISUAL_EVIDENCE:
+        raise ValueError("expected outcome is not supported by visual verification")
+    if len(raw) > 8_000:
+        raise ValueError("model response is too long")
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ObservationValidationError("json_parse", str(exc)) from exc
+    predicates = sorted(PREDICATES[expected_outcome] - {"access_mismatch"})
+    if not isinstance(parsed, dict):
+        raise ObservationValidationError("schema_or_semantic_validation", "candidate output must be an object")
+    if parsed.get("outcome") != expected_outcome:
+        raise ObservationValidationError("schema_or_semantic_validation", "candidate outcome mismatch")
+    evidence = parsed.get("evidence")
+    evidence_frames = parsed.get("evidence_frames")
+    if not isinstance(evidence, dict) or set(evidence) != set(predicates):
+        raise ObservationValidationError(
+            "schema_or_semantic_validation", "candidate evidence must answer every predicate"
+        )
+    if not isinstance(evidence_frames, dict) or set(evidence_frames) != set(predicates):
+        raise ObservationValidationError(
+            "schema_or_semantic_validation", "candidate evidence_frames must cite every predicate"
+        )
+    observations = []
+    for predicate in predicates:
+        supported = evidence[predicate]
+        if supported is not None and type(supported) is not bool:
+            raise ObservationValidationError(
+                "schema_or_semantic_validation", "candidate evidence must be boolean or null"
+            )
+        indices = evidence_frames[predicate]
+        if (
+            not isinstance(indices, list)
+            or not 1 <= len(indices) <= 4
+            or any(type(index) is not int for index in indices)
+            or len(set(indices)) != len(indices)
+        ):
+            raise ObservationValidationError(
+                "frame_validation", "candidate evidence_frames must contain distinct frame indices"
+            )
+        observations.append({
+            "predicate": predicate,
+            "supported": supported,
+            "frame_indices": indices,
+        })
+    normalized = {
+        "outcome": parsed.get("outcome"),
+        "summary": parsed.get("summary"),
+        "observations": observations,
+        "limitations": parsed.get("limitations"),
+    }
+    try:
+        value = VisualObservation.model_validate(normalized)
+    except ValueError as exc:
+        raise ObservationValidationError("schema_or_semantic_validation", str(exc)) from exc
+    for observation in value.observations:
+        if any(index < 0 or index >= frame_count for index in observation.frame_indices):
+            raise ObservationValidationError("frame_validation", "evidence references a frame outside this request")
+    return value
+
+
 def verification_verdict(observation: VisualObservation, expected_outcome: str) -> str:
     """Interpret a visual observation without converting it into incident truth."""
     if expected_outcome not in REQUIRED_VISUAL_EVIDENCE:
@@ -142,6 +207,33 @@ def generation_schema(candidate_outcome: str | None = None) -> dict:
         schema["properties"]["summary"]["maxLength"] = 160
         schema["properties"]["limitations"] = {
             "type": "array", "maxItems": 2, "items": {"type": "string", "maxLength": 120}}
+        if candidate_outcome is not None:
+            evidence_properties = {
+                predicate: {"type": ["boolean", "null"]} for predicate in sorted(
+                    predicates - {"access_mismatch"}
+                )
+            }
+            frame_properties = {
+                predicate: {
+                    "type": "array", "minItems": 1, "maxItems": 4,
+                    "items": {"type": "integer", "minimum": 0, "maximum": 3},
+                } for predicate in sorted(predicates - {"access_mismatch"})
+            }
+            schema["properties"]["evidence"] = {
+                "type": "object", "properties": evidence_properties,
+                "required": sorted(evidence_properties), "additionalProperties": False,
+            }
+            schema["properties"]["evidence_frames"] = {
+                "type": "object", "properties": frame_properties,
+                "required": sorted(frame_properties), "additionalProperties": False,
+            }
+            schema["required"] = [
+                "outcome", "summary", "evidence", "evidence_frames", "limitations"
+            ]
+            schema.pop("observations", None)
+            schema.pop("$defs", None)
+            alternatives.append(schema)
+            continue
         # The visual model has no access logs. Keep this predicate for the policy layer.
         allowed = sorted(predicates - {"access_mismatch"})
         observation = schema.pop("$defs")["Observation"]

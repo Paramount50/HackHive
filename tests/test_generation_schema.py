@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from backend.inference.contracts import generation_schema, parse_observation
+from backend.inference.contracts import generation_schema, parse_candidate_observation, parse_observation
 
 
 def accepts(text):
@@ -49,6 +49,58 @@ def test_candidate_schema_is_fixed_to_the_expected_category():
     assert len(alternatives) == 1
     assert alternatives[0]["properties"]["outcome"]["enum"] == ["aggression_fight"]
     assert "intrusion_unauthorized_access" not in str(alternatives[0])
+    assert set(alternatives[0]["properties"]["evidence"]["required"]) == {
+        "multiple_people_visible", "physical_contact", "aggressive_motion",
+        "temporal_persistence",
+    }
+    assert alternatives[0]["properties"]["evidence_frames"]["properties"][
+        "physical_contact"
+    ]["items"]["maximum"] == 3
+
+
+def test_candidate_parser_requires_every_predicate_and_preserves_null():
+    raw = json.dumps({
+        "outcome": "aggression_fight",
+        "summary": "A physical altercation is visible.",
+        "evidence": {
+            "multiple_people_visible": True,
+            "physical_contact": True,
+            "aggressive_motion": None,
+            "temporal_persistence": False,
+        },
+        "evidence_frames": {
+            "multiple_people_visible": [0],
+            "physical_contact": [1, 2, 3],
+            "aggressive_motion": [1],
+            "temporal_persistence": [3],
+        },
+        "limitations": [],
+    })
+    parsed = parse_candidate_observation(raw, 4, "aggression_fight")
+    assert {item.predicate: item.supported for item in parsed.observations} == {
+        "multiple_people_visible": True,
+        "physical_contact": True,
+        "aggressive_motion": None,
+        "temporal_persistence": False,
+    }
+
+
+def test_candidate_parser_rejects_out_of_range_frame_without_repair():
+    raw = json.dumps({
+        "outcome": "aggression_fight",
+        "summary": "A physical altercation is visible.",
+        "evidence": {
+            "multiple_people_visible": True, "physical_contact": True,
+            "aggressive_motion": None, "temporal_persistence": True,
+        },
+        "evidence_frames": {
+            "multiple_people_visible": [0], "physical_contact": [4],
+            "aggressive_motion": [1], "temporal_persistence": [3],
+        },
+        "limitations": [],
+    })
+    with pytest.raises(ValueError, match="outside this request"):
+        parse_candidate_observation(raw, 4, "aggression_fight")
 
 
 def test_duplicate_predicates_are_rejected_after_generation():

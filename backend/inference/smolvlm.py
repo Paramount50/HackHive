@@ -10,7 +10,8 @@ from time import perf_counter
 from dataclasses import dataclass
 
 from .contracts import (
-    ObservationValidationError, PREDICATES, generation_schema, parse_observation,
+    ObservationValidationError, PREDICATES, generation_schema, parse_candidate_observation,
+    parse_observation,
 )
 from .hardware import gpu_budget_mib, hardware_report
 from .swift_sampling import select_temporal_surprises
@@ -56,7 +57,9 @@ def candidate_prompt(category: str) -> str:
         "For each predicate use true when visibly supported, false when visibly contradicted, "
         "or null when it cannot be determined reliably. Do not choose another category. "
         "Do not infer intent, guilt, identity, injury, medical state, or authorization. "
-        "Return JSON only with outcome fixed to the candidate, a factual summary, observations, and limitations."
+        "Return JSON only with outcome fixed to the candidate, a factual summary, an evidence "
+        "object and evidence_frames object containing every listed predicate, and limitations. "
+        "Each evidence value must be true, false, or null; do not omit a predicate."
     )
 
 @dataclass(frozen=True)
@@ -306,7 +309,11 @@ class SmolVLMWorker:
                 result["eos_reached"] = eos_token_id is not None and eos_token_id in tokens.tolist()
                 result["timings_ms"].update(preprocess=(prepared-started)*1000, inference=(generated-prepared)*1000)
                 try:
-                    result["observation"] = parse_observation(raw, 4).model_dump()
+                    result["observation"] = (
+                        parse_candidate_observation(raw, 4, candidate_category).model_dump()
+                        if candidate_category
+                        else parse_observation(raw, 4).model_dump()
+                    )
                 except ObservationValidationError as exc:
                     result.update(error_code="invalid_model_output", error=str(exc)[:1000],
                                   validation_stage=exc.stage, validation_error=str(exc)[:1000])

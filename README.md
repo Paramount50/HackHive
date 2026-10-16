@@ -94,6 +94,12 @@ Without `--candidate`, the script remains an independent low-rate audit smoke
 using the controlled multiclass taxonomy. Candidate runs record the candidate,
 category-specific observations, deterministic verification verdict, raw output,
 timestamps, latency, and peak VRAM. This is not an accuracy evaluation.
+Candidate mode requires a fixed `evidence` and `evidence_frames` entry for every
+predicate in the selected category. The application still normalizes that
+response into its existing observations contract and retains the raw JSON.
+Frame indices are constrained to `0..3` and invalid references are rejected,
+never clamped or removed; constrained decoding does not replace downstream
+validation.
 
 For a fair structural/performance comparison, create and reuse one deterministic
 window manifest:
