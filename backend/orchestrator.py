@@ -186,7 +186,7 @@ class EventOrchestrator:
         if self.semantic_submit is None or event_id in self.semantic_submitted_events:
             return
         if str(candidate.category) not in {
-            "person_down", "crowd_gathering", "suspected_tailgating"
+            "person_down", "crowd_gathering", "suspected_tailgating", "aggression_fight"
         }:
             return
         available = [

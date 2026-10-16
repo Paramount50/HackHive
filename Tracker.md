@@ -245,6 +245,16 @@ token count, EOS, max-token, and raw-output diagnostics remain recorded. The
 newer Kaggle run still needs to be repeated to separate its exact truncation
 cause from the source-PTS confusion.
 
+Aggression replay integration — 2026-10-16: XCLIP
+`aggression_fight` candidates now enter the same bounded, category-conditioned
+SmolVLM verification service used by the original candidate categories. A
+deterministic integration test exercises XCLIP candidate creation, event
+persistence, `SemanticJob` submission with the expected aggression outcome,
+the semantic worker callback, and storage of a `supported` verdict on the same
+event. Verification: `python -m pytest -q` completed with 135 passed and one
+Starlette deprecation warning. This is orchestration evidence only; the newest
+2.2B Kaggle smoke and RTX 3060 co-residency measurements remain pending.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.

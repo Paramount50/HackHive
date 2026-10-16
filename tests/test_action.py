@@ -1,10 +1,12 @@
 from pathlib import Path
+from threading import Event
 
 import cv2
 import numpy as np
 
 from backend.contracts import QueryIntent
 from backend.ingest.replay import FramePacket
+from backend.inference.service import SemanticInferenceService
 from backend.media import MediaExporter
 from backend.orchestrator import EventOrchestrator
 from backend.perception.action import ActionClassification, PROMPTS, classify_logits
@@ -55,6 +57,36 @@ class FixedActionClassifier:
             {"aggression_fight": 3.0, "person_down": 0.0, "crowd_gathering": 0.0, "none": 0.0},
             0.60,
         )
+
+
+class SupportedAggressionWorker:
+    def __init__(self) -> None:
+        self.categories: list[str] = []
+
+    def load(self):
+        return {"model_id": "fixture://smolvlm", "revision": "test-revision"}
+
+    def analyze_candidate(self, images, pts_ms, candidate_category):
+        self.categories.append(candidate_category)
+        return {
+            "status": "completed",
+            "observation": {
+                "outcome": "aggression_fight",
+                "summary": "Model prose retained for audit only.",
+                "observations": [
+                    {"predicate": "multiple_people_visible", "supported": True, "frame_indices": [0, 1]},
+                    {"predicate": "physical_contact", "supported": True, "frame_indices": [1, 2]},
+                    {"predicate": "aggressive_motion", "supported": True, "frame_indices": [1, 2, 3]},
+                    {"predicate": "temporal_persistence", "supported": True, "frame_indices": [0, 3]},
+                ],
+                "limitations": [],
+            },
+            "raw_output": "fixture-output",
+            "model_id": "fixture://smolvlm",
+            "model_revision": "test-revision",
+            "prompt_version": "candidate-v1",
+            "timings_ms": {"total": 1.0},
+        }
 
 
 def make_session(store: Store, session_id: str, started: int) -> None:
@@ -117,6 +149,67 @@ def test_xclip_window_creates_reviewable_action_event_with_model_scores(tmp_path
     assert action_predicate["details"]["class_scores"]["aggression_fight"] == 3.0
     assert len(action_predicate["frame_indices"]) == 8
     assert action_predicate["frame_indices"] == sorted(action_predicate["frame_indices"])
+
+
+def test_xclip_aggression_reaches_vlm_and_persists_verdict_on_same_event(tmp_path: Path) -> None:
+    store = Store()
+    make_session(store, "aggression-vlm-session", 50_000)
+    classifier = FixedActionClassifier("aggression_fight")
+    worker = SupportedAggressionWorker()
+    completed = Event()
+    handled = []
+
+    def persist(job, result):
+        handled.append((job, store.record_vlm_result(job, result)))
+        completed.set()
+
+    service = SemanticInferenceService(worker, persist, selection_strategy="uniform")
+    service.start()
+    orchestrator = EventOrchestrator(
+        session_id="aggression-vlm-session",
+        session_started_utc_ms=50_000,
+        pipeline=PerceptionPipeline(EmptyDetector()),
+        store=store,
+        media=MediaExporter(tmp_path / "aggression-vlm-media"),
+        action_classifier=classifier,
+        semantic_submit=service.submit,
+    )
+    packets = []
+    for index in range(11):
+        path = tmp_path / f"aggression-vlm-{index}.jpg"
+        assert cv2.imwrite(str(path), np.full((48, 64, 3), index * 10, dtype=np.uint8))
+        pts = index * 200
+        packets.append(FramePacket(
+            "cam-1", "aggression-vlm-session", index, pts, 50_000 + pts,
+            64, 48, str(path), False,
+        ))
+
+    try:
+        touched = []
+        for packet in packets:
+            touched.extend(orchestrator.process(packet))
+        assert completed.wait(2)
+        orchestrator.finish(packets[-1])
+    finally:
+        service.close()
+
+    assert len(set(touched)) == 1
+    event_id = touched[0]
+    assert worker.categories == ["aggression_fight"]
+    assert handled[0][0].event_id == event_id
+    assert handled[0][0].expected_outcome == "aggression_fight"
+    assert handled[0][1] == "supported"
+    event = store.get_event(event_id)
+    assert event is not None
+    assert event["category"] == "aggression_fight"
+    assert "VLM verification verdict: supported." in event["limitations"]
+    window = store.connection.execute(
+        """SELECT observations_json FROM analysis_windows
+           WHERE reason='vlm_verification' AND session_id=?""",
+        ("aggression-vlm-session",),
+    ).fetchone()
+    assert window is not None
+    assert '"verdict": "supported"' in window["observations_json"]
 
 
 def test_unknown_action_windows_are_logged_without_creating_incidents(tmp_path: Path) -> None:
