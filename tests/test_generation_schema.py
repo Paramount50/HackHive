@@ -175,6 +175,8 @@ def test_candidate_prompt_uses_only_local_frame_indices():
     prompt = candidate_prompt("aggression_fight")
     assert "LOCAL FRAME INDEX" in prompt
     assert "source PTS" not in prompt
+    assert "temporal sequence" in prompt
+    assert "single frame showing several people" in prompt
 
 
 def test_truncated_candidate_json_remains_invalid():

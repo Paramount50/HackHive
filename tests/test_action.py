@@ -9,7 +9,9 @@ from backend.ingest.replay import FramePacket
 from backend.inference.service import SemanticInferenceService, SemanticJob
 from backend.media import MediaExporter
 from backend.orchestrator import EventOrchestrator
-from backend.perception.action import ActionClassification, PROMPTS, classify_logits
+from backend.perception.action import (
+    ActionClassification, PROMPTS, aggregate_action_classifications, classify_logits,
+)
 from backend.perception.pipeline import BoxDetection, PerceptionPipeline
 from backend.storage import Store
 
@@ -36,6 +38,36 @@ def test_classify_logits_rejects_invalid_model_output() -> None:
         assert "finite prompt scores" in str(exc)
     else:
         raise AssertionError("wrong-sized output was accepted")
+
+
+def test_temporal_action_aggregation_preserves_strong_altercation_evidence() -> None:
+    crowd = ActionClassification(
+        "crowd_gathering", "crowd_gathering",
+        {"aggression_fight": 0.20, "person_down": 0.10, "crowd_gathering": 0.45, "none": 0.25},
+        {"aggression_fight": 1.0, "person_down": 0.0, "crowd_gathering": 2.0, "none": 0.5},
+        0.20,
+    )
+    altercation = ActionClassification(
+        "aggression_fight", "aggression_fight",
+        {"aggression_fight": 0.593, "person_down": 0.054, "crowd_gathering": 0.25, "none": 0.103},
+        {"aggression_fight": 7.0, "person_down": 4.0, "crowd_gathering": 6.0, "none": 5.0},
+        0.343,
+    )
+    later_crowd = ActionClassification(
+        "crowd_gathering", "crowd_gathering",
+        {"aggression_fight": 0.228, "person_down": 0.09, "crowd_gathering": 0.403, "none": 0.278},
+        {"aggression_fight": 3.0, "person_down": 1.0, "crowd_gathering": 4.0, "none": 2.0},
+        0.125,
+    )
+
+    result = aggregate_action_classifications([crowd, altercation, later_crowd])
+
+    assert result.outcome == "aggression_fight"
+    assert result.top_category == "aggression_fight"
+    assert result.normalized_scores["aggression_fight"] == 0.593
+    assert round(result.margin, 3) == 0.143
+    assert result.aggregation_method == "peak_over_replay_windows"
+    assert result.window_count == 3
 
 
 class EmptyDetector:
@@ -112,7 +144,7 @@ def test_xclip_window_creates_reviewable_action_event_with_model_scores(tmp_path
     packets = []
     for index in range(11):
         path = tmp_path / f"action-{index}.jpg"
-        assert cv2.imwrite(str(path), np.full((48, 64, 3), index * 10, dtype=np.uint8))
+        assert cv2.imwrite(str(path), np.full((48, 64, 3), (index * 10) % 256, dtype=np.uint8))
         pts = index * 200
         packets.append(FramePacket(
             "cam-1", "action-session", index, pts, 30_000 + pts, 64, 48, str(path), False
@@ -195,8 +227,9 @@ def test_xclip_aggression_reaches_vlm_and_persists_verdict_on_same_event(tmp_pat
         touched = []
         for packet in packets:
             touched.extend(orchestrator.process(packet))
-        assert completed.wait(2)
+        assert handled == []
         orchestrator.finish(packets[-1])
+        assert completed.wait(2)
     finally:
         service.close()
 
@@ -217,6 +250,77 @@ def test_xclip_aggression_reaches_vlm_and_persists_verdict_on_same_event(tmp_pat
     ).fetchone()
     assert window is not None
     assert '"verdict": "supported"' in window["observations_json"]
+
+
+def test_replay_aggregates_temporal_predictions_before_full_clip_verification(tmp_path: Path) -> None:
+    class SequenceActionClassifier:
+        def __init__(self):
+            self.predictions = [
+                ActionClassification(
+                    "crowd_gathering", "crowd_gathering",
+                    {"aggression_fight": 0.20, "person_down": 0.10, "crowd_gathering": 0.45, "none": 0.25},
+                    {"aggression_fight": 1.0, "person_down": 0.0, "crowd_gathering": 2.0, "none": 0.5},
+                    0.20,
+                ),
+                ActionClassification(
+                    "aggression_fight", "aggression_fight",
+                    {"aggression_fight": 0.593, "person_down": 0.054, "crowd_gathering": 0.25, "none": 0.103},
+                    {"aggression_fight": 7.0, "person_down": 4.0, "crowd_gathering": 6.0, "none": 5.0},
+                    0.343,
+                ),
+                ActionClassification(
+                    "crowd_gathering", "crowd_gathering",
+                    {"aggression_fight": 0.228, "person_down": 0.09, "crowd_gathering": 0.403, "none": 0.278},
+                    {"aggression_fight": 3.0, "person_down": 1.0, "crowd_gathering": 4.0, "none": 2.0},
+                    0.125,
+                ),
+            ]
+
+        def classify(self, image_paths: list[str]) -> ActionClassification:
+            prediction = self.predictions[min(self.calls, len(self.predictions) - 1)]
+            self.calls += 1
+            return prediction
+
+        calls = 0
+
+    store = Store()
+    make_session(store, "temporal-session", 70_000)
+    submitted = []
+    packets = []
+    for index in range(33):
+        path = tmp_path / f"temporal-{index}.jpg"
+        assert cv2.imwrite(str(path), np.full((48, 64, 3), (index * 10) % 256, dtype=np.uint8))
+        pts = index * 200
+        packets.append(FramePacket(
+            "cam-1", "temporal-session", index, pts, 70_000 + pts, 64, 48, str(path), False
+        ))
+    orchestrator = EventOrchestrator(
+        session_id="temporal-session",
+        session_started_utc_ms=70_000,
+        pipeline=PerceptionPipeline(EmptyDetector()),
+        store=store,
+        media=MediaExporter(tmp_path / "temporal-media"),
+        action_classifier=SequenceActionClassifier(),
+        semantic_submit=lambda job: (submitted.append(job), True)[1],
+    )
+
+    touched = []
+    for packet in packets:
+        touched.extend(orchestrator.process(packet))
+    assert submitted == []
+    orchestrator.finish(packets[-1])
+
+    events = store.list_events(QueryIntent())
+    assert len(events) == 1
+    assert events[0]["category"] == "aggression_fight"
+    assert "replay-level temporal action ranking" in events[0]["summary"]
+    assert len(submitted) == 1
+    assert submitted[0].event_id == events[0]["event_id"]
+    assert submitted[0].expected_outcome == "aggression_fight"
+    assert len(submitted[0].source_pts_ms) == 16
+    assert submitted[0].source_pts_ms[0] == packets[0].source_pts_ms
+    assert submitted[0].source_pts_ms[-1] == packets[-1].source_pts_ms
+    assert list(submitted[0].source_pts_ms) == sorted(set(submitted[0].source_pts_ms))
 
 
 def test_unknown_action_windows_are_logged_without_creating_incidents(tmp_path: Path) -> None:

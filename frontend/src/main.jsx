@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -91,13 +91,26 @@ function StatusBar({ status }) {
   const analysis = status?.analysis;
   const vlm = analysis?.vlm;
   const query = status?.query;
+  const queryModelsState = query?.semantic_models_state;
+  const queryModelsReady = queryModelsState === "ready";
+  const queryModelsAvailable = queryModelsState === "available";
+  const chatLabel = queryModelsReady ? "Models ready"
+    : queryModelsAvailable ? "Models available"
+      : queryModelsState === "disabled" ? "Disabled"
+        : queryModelsState === "not_configured" ? "Structured only"
+          : titleCase(query?.state ?? "loading");
+  const chatDescription = queryModelsReady ? `Qwen + MiniLM · ${query?.device ?? "CPU"}`
+    : queryModelsAvailable ? "Local semantic models not loaded"
+      : queryModelsState === "disabled" ? "Local models disabled · filters only"
+        : queryModelsState === "not_configured" ? "Qwen + MiniLM not installed · filters only"
+          : "Structured search available";
   return (
     <section className="status-bar panel">
       <div><span className="eyebrow">YOLO</span><strong className={analysis?.detector_ready ? "healthy" : "warning"}>{analysis?.detector_ready ? "Runtime ready" : "Unavailable"}</strong><span className="metadata">{analysis?.detector_weights ?? "No local weights"}</span></div>
       <div><span className="eyebrow">XCLIP</span><strong className={analysis?.action_model_ready ? "healthy" : "warning"}>{analysis?.action_model_ready ? "Runtime ready" : "Unavailable"}</strong><span className="metadata">Action ranking</span></div>
       <div><span className="eyebrow">SMOLVLM</span><strong className={vlm?.state === "ready" ? "healthy" : "warning"}>{titleCase(vlm?.state ?? "loading")}</strong><span className="metadata">{vlm?.variant ?? "—"} · {vlm?.pending ?? 0} queued · max {vlm?.capacity ?? 3}</span></div>
       <div><span className="eyebrow">SAMPLING</span><strong>{titleCase(vlm?.selection_strategy ?? "swift")}</strong><span className="metadata">Four-frame verification budget</span></div>
-      <div><span className="eyebrow">CHAT</span><strong className={query?.state === "ready" ? "healthy" : "warning"}>{titleCase(query?.state ?? "loading")}</strong><span className="metadata">{query?.semantic_models_state === "ready" ? `Qwen + MiniLM · ${query?.device ?? "CPU"}` : "Structured search available"}</span></div>
+      <div><span className="eyebrow">CHAT</span><strong className={queryModelsReady ? "healthy" : "warning"}>{chatLabel}</strong><span className="metadata">{chatDescription}</span></div>
     </section>
   );
 }
@@ -197,15 +210,25 @@ function ReplayControl({ job, onJob, onError }) {
 }
 
 function QueryPanel({ onSelect, onError }) {
-  const [question, setQuestion] = useState("Show all tailgating events from camera 1 today");
+  const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const historyRef = useRef(null);
   const suggestions = [
     "Show suspected tailgating today",
     "How many crowd gatherings were recorded?",
     "Did anyone appear to be lying on the ground?",
     "What unusual incidents happened on camera 1 this morning?"
   ];
+
+  useEffect(() => {
+    if (historyRef.current) {
+      historyRef.current.scrollTo({
+        top: historyRef.current.scrollHeight,
+        behavior: "smooth"
+      });
+    }
+  }, [messages.length]);
 
   async function ask(event, promptedQuestion = question, offset = 0) {
     event?.preventDefault();
@@ -265,7 +288,7 @@ function QueryPanel({ onSelect, onError }) {
         <input aria-label="Incident question" placeholder="Ask: any tailgating incidents today?" value={question} onChange={(event) => setQuestion(event.target.value)} />
         <button disabled={loading}>{loading ? "Searching…" : "Send"}</button>
       </form>
-      <div className="chat-history">
+      <div className="chat-history" ref={historyRef}>
         {messages.map(({ question: asked, result }, index) => <div className="chat-turn" key={`${asked}-${index}`}>
           <div className="chat-question"><span className="chat-role">YOU</span>{asked}</div>
           <div className={result.needs_clarification ? "query-answer clarification" : "query-answer"}>

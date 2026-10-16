@@ -147,6 +147,8 @@ def test_candidate_submits_four_chronological_frames_once(tmp_path) -> None:
     for packet in packets:
         orchestrator.process(packet)
 
+    assert submitted == []
+    orchestrator.finish(packets[-1])
     assert len(submitted) == 1
     assert submitted[0].expected_outcome == "person_down"
-    assert submitted[0].source_pts_ms == (0, 500, 1_000, 1_500)
+    assert submitted[0].source_pts_ms == (0, 500, 1_000, 1_500, 2_000)

@@ -72,7 +72,12 @@ detector, temporal candidate rules, event storage, and evidence exporter. The VL
 worker is connected as an optional candidate-verification path through one bounded
 background queue. When the pinned local model is installed, a new P0 candidate submits
 four chronological frames; its structured result is attached to that incident and
-remains review-only. Model absence or failure leaves the CPU candidate path available.
+remains review-only. Replay verification is submitted after the clip ends so its
+four selected frames can be drawn from the complete incident interval and context.
+XCLIP action scores are
+also aggregated across temporal windows, allowing a brief altercation to take
+precedence over crowd-only frames while keeping the result review-only. Model
+absence or failure leaves the CPU candidate path available.
 The CPU rules detect candidate `person_down`, `crowd_gathering`, and
 `suspected_tailgating` events. An optional local XCLIP zero-shot action ranker adds
 reviewable `aggression_fight`, `person_down`, and `crowd_gathering` candidates.

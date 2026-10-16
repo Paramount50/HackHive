@@ -46,6 +46,41 @@ class ActionClassification:
     class_scores: dict[str, float]
     margin: float
     latency_ms: float = 0.0
+    aggregation_method: str = "single_window"
+    window_count: int = 1
+
+
+def aggregate_action_classifications(
+    predictions: list[ActionClassification],
+) -> ActionClassification:
+    if not predictions:
+        raise ValueError("at least one action prediction is required")
+    decisive = [prediction for prediction in predictions if prediction.outcome in EVENT_CATEGORIES]
+    if not decisive:
+        return predictions[-1]
+
+    peak_scores = {
+        category: max(prediction.normalized_scores[category] for prediction in decisive)
+        for category in PROMPTS
+    }
+    ranked = sorted(peak_scores, key=peak_scores.get, reverse=True)
+    top, second = ranked[:2]
+    margin = peak_scores[top] - peak_scores[second]
+    outcome = top if peak_scores[top] >= MIN_PROBABILITY and margin >= MIN_MARGIN else "unknown"
+    class_scores = {
+        category: max(prediction.class_scores[category] for prediction in decisive)
+        for category in PROMPTS
+    }
+    return ActionClassification(
+        outcome=outcome,
+        top_category=top,
+        normalized_scores=peak_scores,
+        class_scores=class_scores,
+        margin=margin,
+        latency_ms=sum(prediction.latency_ms for prediction in decisive),
+        aggregation_method="peak_over_replay_windows",
+        window_count=len(decisive),
+    )
 
 
 def classify_logits(logits: list[float], *, latency_ms: float = 0.0) -> ActionClassification:

@@ -324,12 +324,26 @@ class Store:
             window_ids = json.loads(existing["window_ids_json"])
             if window_id not in window_ids:
                 window_ids.append(window_id)
-            self.connection.execute(
-                """UPDATE events SET last_observed_utc_ms=?, end_utc_ms=NULL, end_pts_ms=NULL,
-                lifecycle_state='active', updated_utc_ms=?,
-                window_ids_json=? WHERE event_id=?""",
-                (end_utc_ms, now, json.dumps(window_ids), existing["event_id"]),
-            )
+            if analysis.model_id.startswith("xclip://"):
+                predicates = self._predicates(analysis)
+                score = evidence_completeness(outcome, predicates)
+                self.connection.execute(
+                    """UPDATE events SET category=?,summary=?,confidence_score=?,
+                       confidence_kind='evidence_completeness_v2',predicates_json=?,
+                       last_observed_utc_ms=?,end_utc_ms=NULL,end_pts_ms=NULL,
+                       lifecycle_state='active',decision_state='needs_review',
+                       updated_utc_ms=?,window_ids_json=? WHERE event_id=?""",
+                    (
+                        outcome, analysis.summary, score, json.dumps(predicates),
+                        end_utc_ms, now, json.dumps(window_ids), existing["event_id"],
+                    ),
+                )
+            else:
+                self.connection.execute(
+                    """UPDATE events SET last_observed_utc_ms=?,end_utc_ms=NULL,end_pts_ms=NULL,
+                       lifecycle_state='active',updated_utc_ms=?,window_ids_json=? WHERE event_id=?""",
+                    (end_utc_ms, now, json.dumps(window_ids), existing["event_id"]),
+                )
             self.connection.commit()
             return existing["event_id"]
         predicates = self._predicates(analysis)
