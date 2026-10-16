@@ -37,7 +37,44 @@ const terminalReplayStates = new Set(["completed", "failed", "stopped"]);
 
 const titleCase = (value = "") => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const formatTime = (value) => value ? new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "Unknown";
-const displayVerification = (verification) => verificationLabels[verification?.verdict ?? verification?.status] ?? titleCase(verification?.status ?? "not_run");
+const formatOffset = (value) => {
+  if (!Number.isFinite(value)) return "Unknown";
+  const total = Math.max(0, Math.floor(value));
+  const hours = Math.floor(total / 3_600_000);
+  const minutes = Math.floor((total % 3_600_000) / 60_000);
+  const seconds = ((total % 60_000) / 1000).toFixed(3).padStart(6, "0");
+  return `${hours ? `${String(hours).padStart(2, "0")}:` : ""}${String(minutes).padStart(2, "0")}:${seconds}`;
+};
+const eventEndOffset = (event) => Number.isFinite(event.end_pts_ms)
+  ? event.end_pts_ms
+  : event.start_pts_ms + Math.max(0, event.last_observed_utc_ms - event.start_utc_ms);
+const hasVideoOffset = (event) => event.session_mode === "replay"
+  && Number.isFinite(event.start_pts_ms);
+const dateTimeToUtcMs = (value, timezone) => {
+  if (!value) return null;
+  const [datePart, timePart] = value.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  const offsetMinutes = timezone === "UTC" ? 0 : 330;
+  return Date.UTC(year, month - 1, day, hour, minute) - offsetMinutes * 60_000;
+};
+const readableFilters = (filters, timezone) => [
+  ...(filters?.categories ?? []).map((category) => labels[category] ?? category),
+  ...(filters?.camera_ids ?? []),
+  filters?.source_name,
+  filters?.start_utc_ms != null ? `From ${formatTime(filters.start_utc_ms)} (${timezone})` : null,
+  filters?.end_utc_ms != null ? `Before ${formatTime(filters.end_utc_ms)} (${timezone})` : null,
+  filters?.start_pts_ms != null && filters?.end_pts_ms != null
+    ? `Video offset ${formatOffset(filters.start_pts_ms)}–${formatOffset(filters.end_pts_ms)}` : null,
+  ...(filters?.review_statuses ?? []).map((status) => `Human review: ${titleCase(status)}`),
+  filters?.has_ready_media != null ? (filters.has_ready_media ? "Playable evidence" : "No playable evidence") : null
+].filter(Boolean);
+const displayVerification = (verification) => {
+  const value = verificationLabels[verification?.verdict ?? verification?.status] ?? titleCase(verification?.status ?? "not_run");
+  return verification?.verdict || ["pending", "running", "completed", "rejected", "failed", "expired"].includes(verification?.status)
+    ? `VLM · ${value}`
+    : value;
+};
 const evidenceAvailability = (event) => [event.has_keyframe && "Keyframe", event.has_clip && "Sampled evidence clip"].filter(Boolean).join(" · ") || "Unavailable";
 
 async function request(path, options) {
@@ -56,7 +93,7 @@ function StatusBar({ status }) {
       <div><span className="eyebrow">XCLIP</span><strong className={analysis?.action_model_ready ? "healthy" : "warning"}>{analysis?.action_model_ready ? "Runtime ready" : "Unavailable"}</strong><span className="metadata">Action ranking · uncalibrated</span></div>
       <div><span className="eyebrow">SMOLVLM</span><strong className={vlm?.state === "ready" ? "healthy" : "warning"}>{titleCase(vlm?.state ?? "loading")}</strong><span className="metadata">{vlm?.variant ?? "—"} · queue {vlm?.pending ?? 0}/{vlm?.capacity ?? 3}</span></div>
       <div><span className="eyebrow">SAMPLING</span><strong>{titleCase(vlm?.selection_strategy ?? "swift")}</strong><span className="metadata">Four-frame verification budget</span></div>
-      <div><span className="eyebrow">CHAT</span><strong className={query?.state === "ready" ? "healthy" : "warning"}>{titleCase(query?.state ?? "loading")}</strong><span className="metadata">Qwen + MiniLM · {query?.device ?? "CPU"}</span></div>
+      <div><span className="eyebrow">CHAT</span><strong className={query?.state === "ready" ? "healthy" : "warning"}>{titleCase(query?.state ?? "loading")}</strong><span className="metadata">{query?.semantic_models_state === "ready" ? `Qwen + MiniLM · ${query?.device ?? "CPU"}` : `Structured search · semantic models ${titleCase(query?.semantic_models_state ?? "loading")}`}</span></div>
     </section>
   );
 }
@@ -167,7 +204,7 @@ function QueryPanel({ onSelect, onError }) {
     "What unusual incidents happened on camera 1 this morning?"
   ];
 
-  async function ask(event, promptedQuestion = question) {
+  async function ask(event, promptedQuestion = question, offset = 0) {
     event?.preventDefault();
     if (!promptedQuestion.trim()) return;
     setLoading(true);
@@ -175,10 +212,43 @@ function QueryPanel({ onSelect, onError }) {
       const result = await request("/api/query", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: promptedQuestion, timezone: "Asia/Kolkata" })
+        body: JSON.stringify({ question: promptedQuestion, timezone: "Asia/Kolkata", limit: 20, offset })
       });
       setMessages((previous) => [...previous, { question: promptedQuestion, result }]);
       setQuestion("");
+      onError("");
+    } catch (exception) { onError(exception.message); }
+    finally { setLoading(false); }
+  }
+
+  async function loadMore(index) {
+    const current = messages[index];
+    const offset = current.result.events.length;
+    setLoading(true);
+    try {
+      const page = await request("/api/query", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          question: current.question,
+          timezone: current.result.timezone,
+          limit: current.result.filters?.limit ?? 20,
+          offset
+        })
+      });
+      setMessages((previous) => previous.map((message, messageIndex) => {
+        if (messageIndex !== index) return message;
+        const events = [...message.result.events, ...page.events];
+        return {
+          ...message,
+          result: {
+            ...page,
+            events,
+            result_count: events.length,
+            answer: `Showing ${events.length} of ${page.matching_total} matching recorded incidents.`
+          }
+        };
+      }));
       onError("");
     } catch (exception) { onError(exception.message); }
     finally { setLoading(false); }
@@ -197,13 +267,25 @@ function QueryPanel({ onSelect, onError }) {
           <div className="chat-question"><span className="chat-role">YOU</span>{asked}</div>
           <div className={result.needs_clarification ? "query-answer clarification" : "query-answer"}>
             <strong>{typeof result.answer === "string" ? result.answer : JSON.stringify(result.answer)}</strong>
-            {result.retrieval_mode && <span className="metadata">Retrieval: {result.retrieval_mode} · {result.citations?.length ?? 0} recorded source(s)</span>}
+            {result.retrieval_mode && <span className="metadata">
+              {result.retrieval_mode === "structured" && result.retrieval?.degraded_reason?.startsWith("semantic_model_unavailable")
+                ? "Semantic retrieval unavailable · results use structured filters"
+                : `Retrieval: ${result.retrieval_mode}`}
+              {result.matching_total != null && (result.retrieval_mode === "structured"
+                ? ` · ${result.result_count} shown of ${result.matching_total} structured matches`
+                : ` · ${result.result_count} semantic result(s) · ${result.matching_total} total structured candidates`)}
+              {result.candidate_scan_truncated && ` · scanned first ${result.candidate_scan_count} candidates only`}
+            </span>}
+            {readableFilters(result.filters, result.timezone).length > 0 && <div className="applied-filters"><strong>Applied filters</strong>{readableFilters(result.filters, result.timezone).map((filter) => <span key={filter}>{filter}</span>)}</div>}
             {result.model?.id && <span className="metadata">Local model: {result.model.id}</span>}
-            {result.retrieval?.degraded_reason && <span className="metadata">Fallback: {result.retrieval.degraded_reason}</span>}
+            {result.retrieval?.degraded_reason && !result.retrieval.degraded_reason.startsWith("semantic_model_unavailable") && <span className="metadata">Fallback: {result.retrieval.degraded_reason}</span>}
             {result.needs_clarification && <span className="metadata">Try one of the supported prompts above.</span>}
-            {result.events?.map((event) => <button className="query-result" key={event.event_id} onClick={() => onSelect(event)}>
-              <span>{labels[event.category] ?? event.category}</span><small>{event.summary}</small>{event.semantic_score != null && <small>Semantic match · {Math.round(event.semantic_score * 100)}%</small>}<code>Citation · {event.event_id}</code>
-            </button>)}
+            {result.events?.map((event) => <EvidenceResultCard key={event.event_id} event={event} onSelect={onSelect} />)}
+            {result.filters?.operation === "list"
+              && result.retrieval_mode === "structured"
+              && !result.candidate_scan_truncated
+              && result.events.length < result.matching_total
+              && <button type="button" className="secondary load-more" disabled={loading} onClick={() => loadMore(index)}>Load more matching incidents</button>}
           </div>
         </div>)}
       </div>
@@ -211,25 +293,55 @@ function QueryPanel({ onSelect, onError }) {
   );
 }
 
+function EvidenceSummary({ event }) {
+  const endOffset = eventEndOffset(event);
+  const startOffset = hasVideoOffset(event) ? event.start_pts_ms : null;
+  const duration = Number.isFinite(startOffset) ? Math.max(0, endOffset - startOffset) : null;
+  const recording = event.recording_original_name ?? event.source_name ?? "Recording source unavailable";
+  const review = event.review_status === "unreviewed" ? "Review required" : `Human review · ${titleCase(event.review_status)}`;
+  return (
+    <div className="evidence-summary">
+      {event.thumbnail_media_id
+        ? <img className="incident-thumbnail" src={`/api/media/${event.thumbnail_media_id}`} alt={`Keyframe for ${labels[event.category] ?? event.category}`} loading="lazy" />
+        : <div className="incident-thumbnail unavailable">No keyframe available</div>}
+      <div className="evidence-summary-body">
+        <div className="event-heading">
+          <strong>{labels[event.category] ?? event.category} · {event.camera_name ?? event.camera_id ?? "Camera unknown"}</strong>
+          <span className={`verification ${event.verification?.verdict ?? event.verification?.status}`}>{displayVerification(event.verification)}</span>
+        </div>
+        <p>{event.summary}</p>
+        <div className="source-interval"><strong>{recording}</strong><span>
+          {Number.isFinite(startOffset)
+            ? `Video offset ${formatOffset(startOffset)}–${formatOffset(endOffset)}${duration != null ? ` · ${(duration / 1000).toFixed(1)}s` : ""}`
+            : "Video offset unavailable"}
+        </span></div>
+        <div className="evidence-badges"><span>{review}</span><span>Candidate · {event.candidate?.source ?? "Source unknown"}</span></div>
+        {event.session_mode === "replay" && <small className="metadata">Replay timestamp {formatTime(event.start_utc_ms)} · original capture time unknown</small>}
+        {event.semantic_score != null && <small className="metadata">Semantic match · {Math.round(event.semantic_score * 100)}%</small>}
+        <small className="metadata">Event {event.event_id}</small>
+      </div>
+    </div>
+  );
+}
+
+function EvidenceResultCard({ event, onSelect }) {
+  return (
+    <article className="query-result-card">
+      <EvidenceSummary event={event} />
+      <div className="query-result-actions">
+        <button type="button" onClick={() => onSelect(event)}>Open details</button>
+        <button type="button" className="secondary" onClick={() => onSelect(event)}>Open playback & evidence</button>
+      </div>
+    </article>
+  );
+}
+
 function EventCard({ event, selected, onSelect, onReview }) {
   return (
     <article className={`event-card ${selected ? "selected" : ""}`} onClick={() => onSelect(event)}>
-      {event.thumbnail_media_id
-        ? <img className="incident-thumbnail" src={`/api/media/${event.thumbnail_media_id}`} alt="Incident keyframe thumbnail" loading="lazy" />
-        : <div className="incident-thumbnail unavailable">Evidence unavailable</div>}
       <div className="event-card-body">
-      <div className="event-heading">
-        <span className={`category ${event.category}`}>{labels[event.category] ?? event.category}</span>
-        <span className="review-state">{titleCase(event.review_status)}</span>
-      </div>
-      <p>{event.summary}</p>
-      <div className="card-facts">
-        <span><b>Status</b>{titleCase(event.decision_state)}</span>
-        <span><b>Candidate source</b>{event.candidate?.source ?? "Unknown"}</span>
-        <span><b>Verification</b><i className={`verification ${event.verification?.verdict ?? event.verification?.status}`}>{displayVerification(event.verification)}</i></span>
-        <span><b>Evidence</b>{evidenceAvailability(event)}</span>
-        <span><b>Camera / time</b>{event.camera_name ?? event.camera_id} · {formatTime(event.start_utc_ms)}</span>
-      </div>
+      <EvidenceSummary event={event} />
+      <div className="card-facts"><span><b>System decision</b>{titleCase(event.decision_state)}</span><span><b>Evidence availability</b>{evidenceAvailability(event)}</span></div>
       <span className={`maturity ${maturity[event.category]?.startsWith("Integrated") ? "integrated" : "experimental"}`}>{maturity[event.category]}</span>
       <div className="actions">
         <button onClick={(e) => { e.stopPropagation(); onReview(event, "confirm"); }}>Confirm</button>
@@ -247,23 +359,34 @@ function EvidenceDrawer({ event, onClose, onReview }) {
   const observations = verification.observation?.observations ?? [];
   const selection = verification.selection;
   const totalLatency = verification.timings_ms?.total;
+  const selectedFrames = verification.selected_frames ?? [];
+  const mediaTimestamp = (value) => hasVideoOffset(event) && Number.isFinite(value)
+    ? formatOffset(value - event.session_started_utc_ms)
+    : "Source timestamp unavailable";
   return (
-    <aside className="drawer panel">
+    <aside className="drawer panel" id="evidence-drawer">
       <div className="drawer-header"><h2>Evidence</h2><button onClick={onClose}>Close</button></div>
       <div className="evidence-media">
         {media.filter((item) => item.status === "ready" && item.kind === "keyframe").map((item) =>
           <img key={item.media_id} src={`/api/media/${item.media_id}`} alt="Incident keyframe" />)}
-        {media.filter((item) => item.status === "ready" && item.kind !== "keyframe").map((item) =>
-          <div key={item.media_id}><span className="media-label">Sampled evidence clip</span><video controls preload="metadata" src={`/api/media/${item.media_id}`}>Video playback is unavailable.</video></div>)}
-        {!media.some((item) => item.status === "ready") && <div className="evidence-placeholder">No playable evidence<br /><span>{media.length ? media.map((item) => `${item.kind}: ${item.status}`).join(" · ") : "No media record was created."}</span></div>}
+        {media.filter((item) => item.status === "ready" && item.kind === "event_clip").map((item) =>
+          <div key={item.media_id}>
+            <span className="media-label">{item.kind === "event_clip" ? "Play incident clip" : "Sampled evidence clip"}</span>
+            <video controls preload="metadata" src={`/api/media/${item.media_id}#t=${Math.max(0, event.start_utc_ms - item.coverage_start_utc_ms) / 1000}`}>Video playback is unavailable.</video>
+            <small className="metadata">Available source coverage: {mediaTimestamp(item.coverage_start_utc_ms)}–{mediaTimestamp(item.coverage_end_utc_ms)}</small>
+            {(item.coverage_start_utc_ms > item.requested_start_utc_ms || item.coverage_end_utc_ms < item.requested_end_utc_ms)
+              && <small className="warning">Partial clip coverage · requested context is missing.</small>}
+          </div>)}
+        {!media.some((item) => item.status === "ready" && ["keyframe", "event_clip"].includes(item.kind)) && <div className="evidence-placeholder">No keyframe or playable event clip<br /><span>{media.length ? media.map((item) => `${item.kind}: ${item.status}`).join(" · ") : "No media record was created."}</span></div>}
       </div>
       <section className="evidence-section"><span className="eyebrow">INCIDENT</span><h3>{labels[event.category]}</h3><p>{event.summary}</p>
-        <dl><dt>Candidate source</dt><dd>{event.candidate?.source ?? "Unknown"}</dd><dt>Candidate state</dt><dd>{titleCase(event.decision_state)}</dd><dt>Camera / time</dt><dd>{event.camera_name ?? event.camera_id} · {formatTime(event.start_utc_ms)}</dd><dt>Category maturity</dt><dd>{maturity[event.category]}</dd></dl>
+        <dl><dt>Candidate source</dt><dd>{event.candidate?.source ?? "Unknown"}</dd><dt>System decision</dt><dd>{titleCase(event.decision_state)}</dd><dt>Human review</dt><dd>{titleCase(event.review_status)}</dd><dt>Camera</dt><dd>{event.camera_name ?? event.camera_id}</dd><dt>Recording</dt><dd>{event.recording_original_name ?? event.source_name ?? "Source unavailable"}</dd><dt>Video offset</dt><dd>{hasVideoOffset(event) ? `${formatOffset(event.start_pts_ms)}–${formatOffset(eventEndOffset(event))}` : "Unavailable"}</dd><dt>Replay timestamp</dt><dd>{event.session_mode === "replay" ? `${formatTime(event.start_utc_ms)} · original capture timestamp unknown` : "Not applicable"}</dd><dt>Category maturity</dt><dd>{maturity[event.category]}</dd></dl>
       </section>
       <section className="evidence-section"><span className="eyebrow">SEMANTIC VERIFICATION</span><h3 className={`verification ${verification.verdict ?? verification.status}`}>{displayVerification(verification)}</h3>
-        {observations.length ? <ul className="predicate-list">{observations.map((item) => <li key={item.predicate} className={item.supported === true ? "positive" : item.supported === false ? "negative" : "unknown"}><span>{item.supported === true ? "✓" : item.supported === false ? "✕" : "?"}</span><div><strong>{titleCase(item.predicate)}</strong><small>{item.supported === true ? `Frames ${item.frame_indices.join(", ")}` : item.supported === false ? "Not supported" : "Insufficient visual evidence"}</small></div></li>)}</ul> : <p className="metadata">{verification.error ?? "No visual predicate result is available."}</p>}
+        {observations.length ? <ul className="predicate-list">{observations.map((item) => <li key={item.predicate} className={item.supported === true ? "positive" : item.supported === false ? "negative" : "unknown"}><span>{item.supported === true ? "✓" : item.supported === false ? "✕" : "?"}</span><div><strong>{titleCase(item.predicate)}</strong><small>{item.supported === true ? (item.frame_indices ?? []).map((index) => selectedFrames[index] ? `Source ${formatOffset(selectedFrames[index].source_pts_ms)}` : `VLM input ${index}`).join(" · ") : item.supported === false ? "Not supported" : "Insufficient visual evidence"}</small></div></li>)}</ul> : <p className="metadata">{verification.error ?? "No visual predicate result is available."}</p>}
       </section>
-      {selection && <section className="evidence-section"><span className="eyebrow">SAMPLING</span><dl><dt>Strategy</dt><dd>{titleCase(selection.strategy)}</dd><dt>Candidate pool</dt><dd>{selection.candidate_frame_count} frames</dd><dt>Selected</dt><dd>{selection.target_frames} frames · indices {selection.selected_indices?.join(", ")}</dd>{selection.taylor_order && <><dt>Taylor order</dt><dd>{selection.taylor_order}</dd></>}<dt>Selection latency</dt><dd>{selection.latency_ms?.toFixed(1)} ms</dd></dl></section>}
+      {selectedFrames.length > 0 && <section className="evidence-section"><span className="eyebrow">FRAMES ANALYZED BY THE VLM</span><div className="analyzed-frame-strip">{selectedFrames.map((frame, index) => <figure key={frame.media_id}><img src={`/api/media/${frame.media_id}`} alt={`VLM analyzed frame ${index + 1}`} /><figcaption>{formatOffset(frame.source_pts_ms)} source offset</figcaption></figure>)}</div></section>}
+      {selection && <section className="evidence-section"><span className="eyebrow">SAMPLING</span><dl><dt>Actual strategy</dt><dd>{titleCase(selection.strategy)}</dd><dt>Candidate pool</dt><dd>{selection.candidate_frame_count} frames</dd><dt>Selected source timestamps</dt><dd>{(selection.selected_source_pts_ms ?? []).map(formatOffset).join(", ") || "Unavailable"}</dd><dt>Selected pool positions</dt><dd>{selection.selected_indices?.join(", ") ?? "Unavailable"} · internal details, not source frame numbers</dd>{selection.taylor_order && <><dt>Taylor order</dt><dd>{selection.taylor_order}</dd></>}<dt>Selection latency</dt><dd>{selection.latency_ms?.toFixed(1)} ms</dd></dl></section>}
       <section className="evidence-section"><span className="eyebrow">MODEL</span><dl><dt>Model</dt><dd>{verification.model_id ?? "Not run"}</dd><dt>Revision</dt><dd className="mono">{verification.model_revision ?? "—"}</dd><dt>Inference latency</dt><dd>{totalLatency != null ? `${totalLatency.toFixed(1)} ms` : "—"}</dd>{verification.error_code && <><dt>Error</dt><dd>{verification.error_code}</dd></>}</dl></section>
       <section className="evidence-section"><span className="eyebrow">HUMAN REVIEW</span><h3>{titleCase(event.review_status)}</h3><div className="actions"><button onClick={() => onReview(event, "confirm")}>Confirm</button><button className="danger" onClick={() => onReview(event, "reject")}>Reject</button></div></section>
       {(event.category === "suspected_tailgating" || event.category === "intrusion_unauthorized_access") && <section className="evidence-section"><span className="eyebrow">AUTHORIZATION</span><p>{titleCase(event.authorization_state)} · {event.access_evidence_source ?? "No policy/access evidence"}</p></section>}
@@ -280,9 +403,16 @@ function App() {
   const [categories, setCategories] = useState([]);
   const [reviewStatus, setReviewStatus] = useState("");
   const [evidenceFilter, setEvidenceFilter] = useState("");
+  const [sourceNameFilter, setSourceNameFilter] = useState("");
+  const [startDateTime, setStartDateTime] = useState("");
+  const [endDateTime, setEndDateTime] = useState("");
+  const [offsetStartSeconds, setOffsetStartSeconds] = useState("");
+  const [offsetEndSeconds, setOffsetEndSeconds] = useState("");
   const [message, setMessage] = useState("Loading recorded incidents…");
   const [error, setError] = useState("");
   const [replayJob, setReplayJob] = useState(null);
+  const [eventTotal, setEventTotal] = useState(0);
+  const [eventLimit, setEventLimit] = useState(20);
 
   function updateReplay(job) {
     setReplayJob(job);
@@ -294,49 +424,53 @@ function App() {
     catch (exception) { setError(exception.message); }
   }
 
-  async function loadEvents() {
+  async function loadEvents(append = false) {
     try {
       const filters = new URLSearchParams();
       categories.forEach((category) => filters.append("category", category));
       if (reviewStatus) filters.append("review_status", reviewStatus);
       if (evidenceFilter) filters.append("has_evidence", evidenceFilter);
+      if (sourceNameFilter.trim()) filters.set("source_name", sourceNameFilter.trim());
+      const timezone = status?.timezone ?? "Asia/Kolkata";
+      if (startDateTime) filters.set("start_utc_ms", String(dateTimeToUtcMs(startDateTime, timezone)));
+      if (endDateTime) filters.set("end_utc_ms", String(dateTimeToUtcMs(endDateTime, timezone)));
+      if (offsetStartSeconds !== "") filters.set("start_pts_ms", String(Math.round(Number(offsetStartSeconds) * 1000)));
+      if (offsetEndSeconds !== "") filters.set("end_pts_ms", String(Math.round(Number(offsetEndSeconds) * 1000)));
+      const offset = append ? events.length : 0;
+      filters.set("limit", String(eventLimit));
+      filters.set("offset", String(offset));
       const query = filters.toString();
       const result = await request(`/api/events${query ? `?${query}` : ""}`);
-      setEvents(result.events);
-      setMessage(result.events.length ? `${result.count} recorded incident(s)` : "No matching recorded incidents.");
+      setEvents((previous) => append ? [...previous, ...result.events] : result.events);
+      setEventTotal(result.count);
+      setMessage(result.count ? `Showing ${Math.min(offset + result.returned, result.count)} of ${result.count} matching incidents.` : "No matching recorded incidents.");
       setError("");
     } catch (exception) { setError(exception.message); }
   }
 
   useEffect(() => {
     loadStatus();
-    loadEvents();
-  }, [categories, reviewStatus, evidenceFilter]);
+    setEvents([]);
+    loadEvents(false);
+  }, [categories, reviewStatus, evidenceFilter, sourceNameFilter, startDateTime, endDateTime, offsetStartSeconds, offsetEndSeconds]);
 
   useEffect(() => {
-    if (!replayJob || terminalReplayStates.has(replayJob.status)) return undefined;
+    const pendingVerification = events.some((event) => ["pending", "running"].includes(event.verification?.status));
+    if (!replayJob || (!pendingVerification && terminalReplayStates.has(replayJob.status))) return undefined;
     setMessage("Analysis is running; newly recorded incidents appear below.");
     const timer = window.setInterval(() => {
       loadEvents();
       loadStatus();
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [replayJob?.status, categories, reviewStatus, evidenceFilter]);
-
-  async function runFixture(path = "/api/fixtures/run") {
-    try {
-      const result = await request(path, { method: "POST" });
-      setMessage(result.message);
-      await loadEvents();
-    } catch (exception) { setError(exception.message); }
-  }
+  }, [replayJob?.status, events.some((event) => ["pending", "running"].includes(event.verification?.status)), categories, reviewStatus, evidenceFilter]);
 
   async function review(event, action) {
     try {
       await request(`/api/events/${event.event_id}/reviews`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, actor_label: "operator", note: "Reviewed in React dashboard", request_key: `${event.event_id}-${action}` })
+        body: JSON.stringify({ action, actor_label: "operator", note: "Reviewed in React dashboard", request_key: crypto.randomUUID() })
       });
       await loadEvents();
       setSelected(null);
@@ -347,12 +481,13 @@ function App() {
     try {
       setSelected(await request(`/api/events/${event.event_id}`));
       setError("");
+      window.setTimeout(() => document.getElementById("evidence-drawer")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     } catch (exception) { setError(exception.message); }
   }
 
   return (
     <main>
-      <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div><div className="header-actions"><button onClick={() => runFixture()}>Run analysis fixture</button><button onClick={() => runFixture("/api/fixtures/perception-run")}>Run perception fixture</button></div></header>
+      <header><div><span className="eyebrow">LOCAL VIDEO EVENT DESK</span><h1>HackHive</h1></div></header>
       <StatusBar status={status} />
       <div className="policy panel">
         <strong>{status?.analysis?.mode ?? "Checking local models"}</strong>
@@ -370,10 +505,16 @@ function App() {
               <label>Categories<select multiple value={categories} onChange={(event) => setCategories(Array.from(event.target.selectedOptions, (option) => option.value))}>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <label>Review<select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="">Any review</option><option value="unreviewed">Unreviewed</option><option value="confirmed">Confirmed</option><option value="rejected">Rejected</option></select></label>
               <label>Evidence<select value={evidenceFilter} onChange={(event) => setEvidenceFilter(event.target.value)}><option value="">Any evidence</option><option value="true">Playable</option><option value="false">Unavailable</option></select></label>
+              <label>Recording<input value={sourceNameFilter} placeholder="Filename" onChange={(event) => setSourceNameFilter(event.target.value)} /></label>
+              <label>Observed from ({status?.timezone ?? "Asia/Kolkata"})<input type="datetime-local" value={startDateTime} onChange={(event) => setStartDateTime(event.target.value)} /></label>
+              <label>Observed until ({status?.timezone ?? "Asia/Kolkata"})<input type="datetime-local" value={endDateTime} onChange={(event) => setEndDateTime(event.target.value)} /></label>
+              <label>Video offset from (s)<input type="number" min="0" step="0.001" value={offsetStartSeconds} onChange={(event) => setOffsetStartSeconds(event.target.value)} /></label>
+              <label>Video offset until (s)<input type="number" min="0" step="0.001" value={offsetEndSeconds} onChange={(event) => setOffsetEndSeconds(event.target.value)} /></label>
             </div>
           </div>
           <p className="metadata">{message}</p>
           {events.map((event) => <EventCard key={event.event_id} event={event} selected={selected?.event_id === event.event_id} onSelect={selectEvent} onReview={review} />)}
+          {events.length < eventTotal && <button className="secondary load-more" onClick={() => loadEvents(true)}>Load more incidents</button>}
           {!events.length && <div className="empty-state">No matching recorded incidents.</div>}
         </div>
         <EvidenceDrawer event={selected} onClose={() => setSelected(null)} onReview={review} />

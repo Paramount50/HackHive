@@ -31,6 +31,51 @@ def test_count_person_down_in_last_two_hours() -> None:
     assert intent.end_utc_ms - intent.start_utc_ms == 2 * 60 * 60 * 1000
 
 
+def test_explicit_date_and_clock_range_are_applied_in_requested_timezone() -> None:
+    intent = parse_natural_query(NaturalQueryRequest(
+        question="Show person down between 09:00 and 10:00 on 2026-10-16",
+        timezone="Asia/Kolkata",
+    ))
+    assert intent.end_utc_ms - intent.start_utc_ms == 60 * 60 * 1000
+    assert datetime.fromtimestamp(intent.start_utc_ms / 1000, timezone.utc) == datetime(
+        2026, 10, 16, 3, 30, tzinfo=timezone.utc
+    )
+
+
+def test_clock_time_without_date_clarifies_instead_of_being_ignored() -> None:
+    with pytest.raises(QueryClarification, match="need a date"):
+        parse_natural_query(NaturalQueryRequest(
+            question="Show person down around 09:00",
+        ))
+
+
+def test_explicit_human_review_and_multiple_cameras_become_filters() -> None:
+    intent = parse_natural_query(NaturalQueryRequest(
+        question="Show human confirmed person down events on camera 1 and camera 2",
+    ))
+    assert intent.camera_ids == ["cam-1", "cam-2"]
+    assert intent.review_statuses == ["confirmed"]
+
+def test_vlm_verdict_filter_is_not_silently_treated_as_semantic_text() -> None:
+    with pytest.raises(QueryClarification, match="VLM verdict filters are not supported"):
+        parse_natural_query(NaturalQueryRequest(
+            question="Show VLM-supported incidents",
+        ))
+
+
+def test_recording_offset_query_requires_source_and_becomes_filter() -> None:
+    intent = parse_natural_query(NaturalQueryRequest(
+        question="Show incidents from entrance.mp4 from 00:42.400 to 00:49.200",
+    ))
+    assert intent.source_name == "entrance.mp4"
+    assert intent.start_pts_ms == 42_400
+    assert intent.end_pts_ms == 49_200
+    with pytest.raises(QueryClarification, match="recording filename"):
+        parse_natural_query(NaturalQueryRequest(
+            question="Show incidents at video offset 00:42",
+        ))
+
+
 def test_unsupported_category_requests_clarification() -> None:
     with pytest.raises(QueryClarification, match="Unsupported category 'gun'"):
         parse_natural_query(NaturalQueryRequest(question="Show gun incidents today", now_utc_ms=NOW))

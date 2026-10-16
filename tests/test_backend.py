@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from time import monotonic, sleep
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.contracts import FixtureAnalysis, QueryIntent, ReplayStartRequest, ReviewRequest
@@ -95,6 +96,58 @@ def test_review_is_idempotent_and_separate_from_system_decision() -> None:
     assert len(result["reviews"]) == 1
     assert store.list_events(QueryIntent(review_statuses=["confirmed"]))[0]["event_id"] == event_id
     assert store.list_events(QueryIntent(review_statuses=["unreviewed"])) == []
+
+
+def test_review_action_changes_use_distinct_idempotency_keys() -> None:
+    store = make_store()
+    session = store.create_session(1_000)
+    analysis = FixtureAnalysis(
+        outcome="person_down", summary="A person remains prone.",
+        observations=[{"predicate": "prone_posture", "supported": True}],
+    )
+    event_id = store.record_analysis(session, 2_000, 3_000, analysis, "review-cycle")
+    for action, request_key in (
+        ("confirm", "cycle-confirm-1"),
+        ("reject", "cycle-reject"),
+        ("confirm", "cycle-confirm-2"),
+    ):
+        store.review(
+            event_id,
+            ReviewRequest(action=action, actor_label="tester", request_key=request_key),
+        )
+    result = store.get_event(event_id)
+    assert result["review_status"] == "confirmed"
+    assert [entry["action"] for entry in result["reviews"]] == ["confirm", "reject", "confirm"]
+    with pytest.raises(ValueError, match="already used"):
+        store.review(
+            event_id,
+            ReviewRequest(action="reject", actor_label="tester", request_key="cycle-confirm-1"),
+        )
+
+
+def test_source_offsets_filter_by_recording_and_report_durable_source_name() -> None:
+    store = make_store()
+    started = 10_000
+    session = store.create_session(started, source_name="entrance.mp4")
+    event_id = store.record_analysis(
+        session,
+        started + 42_400,
+        started + 49_200,
+        FixtureAnalysis(
+            outcome="person_down", summary="A person remained on the ground.",
+            observations=[{"predicate": "prone_posture", "supported": True}],
+        ),
+        "offset-event",
+        start_pts_ms=42_400,
+    )
+    matches = store.list_events(QueryIntent(
+        source_name="entrance.mp4", start_pts_ms=42_000, end_pts_ms=50_000,
+    ))
+    assert [event["event_id"] for event in matches] == [event_id]
+    assert matches[0]["source_name"] == "entrance.mp4"
+    assert store.count_events(QueryIntent(
+        source_name="entrance.mp4", start_pts_ms=50_000, end_pts_ms=60_000,
+    )) == 0
 
 
 def test_event_lookup_and_review_do_not_depend_on_list_limit() -> None:
@@ -216,6 +269,21 @@ def test_api_fixture_and_citations() -> None:
         query = client.post("/api/query", json={"operation": "list"})
         assert query.status_code == 200
         assert query.json()["citations"]
+
+
+def test_chat_status_reports_structured_search_ready_without_optional_models(tmp_path, monkeypatch) -> None:
+    from backend import main
+
+    monkeypatch.setattr(main, "chat_enabled", True)
+    monkeypatch.setattr(main, "chat_model_dir", tmp_path / "qwen")
+    monkeypatch.setattr(main, "embedding_model_dir", tmp_path / "minilm")
+    monkeypatch.setattr(main, "chat_model", None)
+    monkeypatch.setattr(main, "semantic_ranker", None)
+
+    query_status = main.status()["query"]
+    assert query_status["state"] == "ready"
+    assert query_status["semantic_models_state"] == "not_configured"
+    assert query_status["enabled"] is True
 
 
 def test_perception_fixture_runs_rules_before_storage() -> None:

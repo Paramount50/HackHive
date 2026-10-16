@@ -182,8 +182,9 @@ def status() -> dict[str, Any]:
         and semantic_ranker is not None and semantic_ranker.embedder.model is not None
     )
     query_status = {
-        "enabled": chat_enabled,
-        "state": (
+        "enabled": True,
+        "state": "ready",
+        "semantic_models_state": (
             "disabled" if not chat_enabled
             else "ready" if query_models_loaded
             else "available" if query_weights_available
@@ -286,8 +287,14 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
         policy = {"gate_line_y": request.gate_line_y, "zone": request.zone}
         classifier = get_action_classifier()
         semantic_service = get_vlm_service()
+        uploaded = store.connection.execute(
+            "SELECT recording_id FROM recordings WHERE stored_name=?",
+            (request.source_name,),
+        ).fetchone()
         session_id = store.create_session(
-            started, mode="replay", policy_version=policy_version, policy_json=policy
+            started, mode="replay", policy_version=policy_version, policy_json=policy,
+            source_name=request.source_name,
+            recording_id=uploaded["recording_id"] if uploaded else None,
         )
         action_model_enabled = classifier is not None
         orchestrator = EventOrchestrator(
@@ -304,7 +311,14 @@ def start_replay(request: ReplayStartRequest) -> dict[str, Any]:
         )
         on_frame, on_finish = orchestrator.process, orchestrator.finish
     else:
-        session_id = store.create_session(started, mode="replay")
+        uploaded = store.connection.execute(
+            "SELECT recording_id FROM recordings WHERE stored_name=?",
+            (request.source_name,),
+        ).fetchone()
+        session_id = store.create_session(
+            started, mode="replay", source_name=request.source_name,
+            recording_id=uploaded["recording_id"] if uploaded else None,
+        )
     if on_frame is None:
         analysis_message = (
             "Video is decoding, but no event analysis ran because local YOLO weights "
@@ -378,17 +392,31 @@ def events(
     has_evidence: bool | None = None,
     start_utc_ms: int | None = None,
     end_utc_ms: int | None = None,
+    source_name: str | None = Query(default=None, min_length=1, max_length=240),
+    start_pts_ms: int | None = Query(default=None, ge=0),
+    end_pts_ms: int | None = Query(default=None, gt=0),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
     intent = QueryIntent(
         categories=category,
         camera_ids=camera_id,
         review_statuses=review_status,
         has_ready_media=has_evidence,
+        source_name=source_name,
+        start_pts_ms=start_pts_ms,
+        end_pts_ms=end_pts_ms,
         start_utc_ms=start_utc_ms,
         end_utc_ms=end_utc_ms,
+        limit=limit,
+        offset=offset,
     )
     result = store.list_events(intent)
-    return {"events": result, "count": len(result), "timezone": "Asia/Kolkata"}
+    total = store.count_events(intent)
+    return {
+        "events": result, "count": total, "returned": len(result), "offset": offset,
+        "limit": limit, "has_more": offset + len(result) < total, "timezone": "Asia/Kolkata",
+    }
 
 
 @app.get("/api/events/{event_id}")
@@ -416,7 +444,10 @@ def media(media_id: str) -> FileResponse:
 def review(event_id: str, request: ReviewRequest) -> dict[str, Any]:
     if not store.connection.execute("SELECT 1 FROM events WHERE event_id=?", (event_id,)).fetchone():
         raise HTTPException(status_code=404, detail="event not found")
-    return store.review(event_id, request)
+    try:
+        return store.review(event_id, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/api/fixtures/run")

@@ -86,10 +86,7 @@ def _semantic_intent(request: NaturalQueryRequest) -> QueryIntent:
         timezone=request.timezone,
         now_utc_ms=request.now_utc_ms,
     )
-    try:
-        parsed = parse_natural_query(probe)
-    except QueryClarification:
-        parsed = QueryIntent()
+    parsed = parse_natural_query(probe)
     return parsed.model_copy(update={"categories": [], "camera_ids": _camera_ids(text)})
 
 
@@ -109,6 +106,7 @@ def build_query_plan(request: NaturalQueryRequest, text_model: TextModel | None 
     has_filters = bool(
         intent.categories or intent.camera_ids or intent.start_utc_ms is not None
         or intent.end_utc_ms is not None or intent.review_statuses or intent.has_ready_media is not None
+        or intent.source_name or intent.start_pts_ms is not None or intent.end_pts_ms is not None
     )
     suggested: RetrievalMode = "hybrid" if semantic and has_filters else "semantic" if semantic else "structured"
     semantic_query = request.question if semantic else ""
@@ -201,12 +199,30 @@ class HybridQueryEngine:
         if isinstance(request, QueryIntent):
             plan = QueryPlan(request, "structured", "")
             timezone_name = "Asia/Kolkata"
+            requested_offset = request.offset
         else:
             plan = build_query_plan(request, self.text_model)
+            plan = QueryPlan(
+                plan.intent.model_copy(update={"limit": request.limit, "offset": request.offset}),
+                plan.retrieval_mode,
+                plan.semantic_query,
+            )
             timezone_name = request.timezone
-        candidate_intent = plan.intent.model_copy(update={"limit": 100})
-        candidates = self.store.list_events(candidate_intent)
-        retrieval_mode = plan.retrieval_mode
+            requested_offset = request.offset
+        aggregate_query = plan.intent.operation in {"count", "group"}
+        total_matching = self.store.count_events(plan.intent)
+        semantic_requested = plan.retrieval_mode in {"semantic", "hybrid"}
+        if semantic_requested and self.ranker is not None and requested_offset:
+            raise QueryClarification("Load more is not available for semantic-ranked results yet.")
+        structured_page = not semantic_requested or self.ranker is None
+        candidates = self.store.list_events(
+            plan.intent.model_copy(update={
+                "operation": "list",
+                "limit": plan.intent.limit if structured_page else 100,
+                "offset": plan.intent.offset if structured_page else 0,
+            })
+        )
+        retrieval_mode = "structured" if aggregate_query else plan.retrieval_mode
         semantic_scores: dict[str, float] = {}
         degraded_reason: str | None = None
         ranking_ms = 0.0
@@ -242,33 +258,28 @@ class HybridQueryEngine:
                         result.append(merged)
                         semantic_scores[event["event_id"]] = round(score, 4)
         else:
-            result = candidates[: plan.intent.limit]
+            result = candidates if structured_page else candidates[: plan.intent.limit]
 
         answer_started = perf_counter()
         if plan.intent.operation == "count":
-            answer: str | dict[str, int] = f"{len(candidates)} matching recorded incidents."
+            answer: str | dict[str, int] = f"{total_matching} matching recorded incidents."
         elif plan.intent.operation == "group":
-            grouped: dict[str, int] = {}
-            for item in candidates:
-                key = item["camera_name"] if plan.intent.group_by == "camera" else item["category"]
-                grouped[key] = grouped.get(key, 0) + 1
-            answer = grouped
+            answer = self.store.group_events(plan.intent)
         elif not result:
             answer = "No matching recorded incidents. This does not establish that nothing happened."
         else:
-            facts = f"Application retrieval returned {len(result)} recorded incident(s)."
-            if self.text_model is not None:
-                try:
-                    answer = self.text_model.answer(
-                        request.question if isinstance(request, NaturalQueryRequest) else "Summarize the matching incidents.",
-                        result,
-                        facts,
-                    )
-                except (RuntimeError, ValueError, ImportError, OSError):
-                    degraded_reason = degraded_reason or "answer_model_unavailable"
-                    answer = facts
+            if retrieval_mode == "structured":
+                answer = f"Showing {len(result)} of {total_matching} matching recorded incidents."
             else:
-                answer = facts
+                answer = (
+                    f"Found {len(result)} semantic match(es) among {len(candidates)} scanned "
+                    f"structured candidate(s)."
+                )
+                if total_matching > len(candidates):
+                    answer += (
+                        f" Candidate scanning is capped at {len(candidates)} of "
+                        f"{total_matching} structured matches."
+                    )
         answer_ms = (perf_counter() - answer_started) * 1000
         citations = [{"event_id": item["event_id"]} for item in result]
         return {
@@ -278,6 +289,18 @@ class HybridQueryEngine:
             "filters": plan.intent.model_dump(mode="json"),
             "timezone": timezone_name,
             "events": result,
+            "result_count": len(result),
+            "matching_total": total_matching,
+            "candidate_scan_count": (
+                len(candidates)
+                if not aggregate_query and semantic_requested and self.ranker is not None
+                else len(result)
+            ),
+            "candidate_scan_truncated": (
+                not aggregate_query
+                and semantic_requested and self.ranker is not None
+                and len(candidates) < total_matching
+            ),
             "citations": citations,
             "retrieval": {
                 "structured_candidates": len(candidates),

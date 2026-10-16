@@ -4,9 +4,9 @@ from threading import Event
 import cv2
 import numpy as np
 
-from backend.contracts import QueryIntent
+from backend.contracts import FixtureAnalysis, QueryIntent
 from backend.ingest.replay import FramePacket
-from backend.inference.service import SemanticInferenceService
+from backend.inference.service import SemanticInferenceService, SemanticJob
 from backend.media import MediaExporter
 from backend.orchestrator import EventOrchestrator
 from backend.perception.action import ActionClassification, PROMPTS, classify_logits
@@ -288,3 +288,66 @@ def test_xclip_failure_is_recorded_without_stopping_cpu_candidates(tmp_path: Pat
     assert failure["status"] == "failed"
     assert failure["error_code"] == "action_inference_failed"
     assert "fixture model failure" in failure["observations_json"]
+
+
+def test_vlm_selected_frames_are_saved_as_event_media_with_source_timestamps(tmp_path: Path) -> None:
+    store = Store(media_root=tmp_path / "media")
+    session_id = store.create_session(50_000, source_name="entrance.mp4")
+    event_id = store.record_analysis(
+        session_id,
+        50_200,
+        52_000,
+        FixtureAnalysis(
+            outcome="aggression_fight",
+            summary="A candidate physical altercation.",
+            model_id="xclip://microsoft/xclip-base-patch32",
+            observations=[{"predicate": "xclip_class_scores", "supported": True}],
+        ),
+        "vlm-frame-persist",
+        start_pts_ms=200,
+    )
+    paths = []
+    for index in range(8):
+        path = tmp_path / f"candidate-{index}.jpg"
+        assert cv2.imwrite(str(path), np.full((32, 32, 3), index * 20, dtype=np.uint8))
+        paths.append(str(path))
+    job = SemanticJob(
+        event_id=event_id,
+        camera_id="cam-1",
+        candidate_key="vlm-frame-persist",
+        expected_outcome="aggression_fight",
+        image_paths=tuple(paths),
+        source_pts_ms=tuple(index * 200 for index in range(8)),
+        verification_id="verification-frame-persist",
+    )
+    store.record_vlm_result(job, {
+        "status": "completed",
+        "observation": {
+            "outcome": "aggression_fight",
+            "summary": "Multiple people make physical contact.",
+            "observations": [
+                {"predicate": "multiple_people_visible", "supported": True, "frame_indices": [0]},
+                {"predicate": "physical_contact", "supported": True, "frame_indices": [1]},
+                {"predicate": "aggressive_motion", "supported": True, "frame_indices": [2]},
+                {"predicate": "temporal_persistence", "supported": True, "frame_indices": [3]},
+            ],
+            "limitations": [],
+        },
+        "model_id": "fixture://vlm",
+        "model_revision": "test",
+        "prompt_version": "test",
+        "timings_ms": {"total": 10.0},
+        "selection": {
+            "strategy": "swift_latent_taylor_v1",
+            "candidate_frame_count": 8,
+            "selected_indices": [1, 3, 5, 7],
+            "selected_source_pts_ms": [200, 600, 1_000, 1_400],
+            "target_frames": 4,
+            "latency_ms": 2.0,
+        },
+    })
+    event = store.get_event(event_id, include_media=True)
+    frames = event["verification"]["selected_frames"]
+    assert [frame["source_pts_ms"] for frame in frames] == [200, 600, 1_000, 1_400]
+    assert all(frame["status"] == "ready" for frame in frames)
+    assert len([item for item in event["media"] if item["kind"] == "vlm_frame"]) == 4

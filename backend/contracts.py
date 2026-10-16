@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Category(StrEnum):
@@ -68,9 +68,13 @@ class QueryIntent(BaseModel):
     )
     review_statuses: list[ReviewStatus] = Field(default_factory=list, max_length=3)
     has_ready_media: bool | None = None
+    source_name: str | None = Field(default=None, min_length=1, max_length=240)
+    start_pts_ms: int | None = Field(default=None, ge=0)
+    end_pts_ms: int | None = Field(default=None, gt=0)
     start_utc_ms: int | None = None
     end_utc_ms: int | None = None
     limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
     group_by: str | None = None
 
     @field_validator("operation")
@@ -95,6 +99,21 @@ class QueryIntent(BaseModel):
             raise ValueError("end_utc_ms must be after start_utc_ms")
         return value
 
+    @field_validator("end_pts_ms")
+    @classmethod
+    def ordered_source_range(cls, value: int | None, info: Any) -> int | None:
+        start = info.data.get("start_pts_ms")
+        if value is not None and start is not None and value <= start:
+            raise ValueError("end_pts_ms must be after start_pts_ms")
+        return value
+
+    @model_validator(mode="after")
+    def source_offset_requires_recording(self) -> "QueryIntent":
+        has_offset = self.start_pts_ms is not None or self.end_pts_ms is not None
+        if has_offset and (self.start_pts_ms is None or self.end_pts_ms is None or not self.source_name):
+            raise ValueError("video-offset filters require source_name and both start_pts_ms/end_pts_ms")
+        return self
+
 
 class NaturalQueryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -102,6 +121,8 @@ class NaturalQueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     timezone: str = "Asia/Kolkata"
     now_utc_ms: int | None = None
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
 
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")

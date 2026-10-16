@@ -31,6 +31,41 @@ def test_count_is_not_truncated_by_list_retrieval_limit() -> None:
     assert result["answer"] == "101 matching recorded incidents."
 
 
+def test_structured_list_reports_exact_total_and_paginates() -> None:
+    store = Store()
+    session = store.create_session(NOW - 100_000)
+    for index in range(105):
+        store.record_analysis(
+            session, NOW - 90_000 + index, NOW - 80_000 + index,
+            FixtureAnalysis(
+                outcome="person_down", summary=f"Recorded candidate {index}.",
+                observations=[{"predicate": "visible_person", "supported": True}],
+            ),
+            f"list-total-{index}",
+        )
+    result = HybridQueryEngine(store).execute(NaturalQueryRequest(
+        question="Show person down incidents", now_utc_ms=NOW
+    ))
+    assert result["result_count"] == 20
+    assert result["matching_total"] == 105
+    assert result["candidate_scan_count"] == 20
+    assert result["candidate_scan_truncated"] is False
+    assert result["answer"] == "Showing 20 of 105 matching recorded incidents."
+
+    next_page = HybridQueryEngine(store).execute(NaturalQueryRequest(
+        question="Show person down incidents", now_utc_ms=NOW, limit=20, offset=20
+    ))
+    assert next_page["result_count"] == 20
+    assert next_page["matching_total"] == 105
+    assert next_page["filters"]["offset"] == 20
+    assert next_page["events"][0]["event_id"] != result["events"][0]["event_id"]
+
+    grouped = HybridQueryEngine(store).execute(NaturalQueryRequest(
+        question="Group person down incidents by category", now_utc_ms=NOW
+    ))
+    assert grouped["answer"] == {"person_down": 105}
+
+
 class KeywordEmbedder:
     model_id = "fixture://keyword-embedder"
     model_revision = "v1"

@@ -6,13 +6,22 @@
 queries as the source of truth. Exact counts, grouping, categories, cameras, time
 ranges and review state are calculated by application code. Descriptive questions
 can additionally rank the filtered real events with CPU MiniLM embeddings; Qwen3-0.6B
-selects a validated retrieval mode and phrases a bounded answer from those records.
-Application code creates citations from retrieved event IDs, so model text cannot
-introduce a trusted event reference. Raw video and frames are never embedded.
+selects a validated retrieval mode. Answers and totals are generated deterministically
+from the parsed filters and database results; the language model does not generate
+incident facts or citations. Application code creates citations from retrieved event
+IDs. Raw video and frames are never embedded.
 
-The selected local models are pinned to exact revisions:
+The parser accepts ISO dates, complete clock ranges, camera and human-review filters,
+and source-offset ranges such as `entrance.mp4 from 00:42.400 to 00:49.200`.
+Ambiguous or unsupported constraints ask for clarification rather than being silently
+discarded; VLM verdicts are not currently query filters, while human-review state is.
+Count and category/camera grouping use exact SQL aggregates. Event lists
+report the exact number matching structured filters; semantic ranking still searches
+at most the newest 100 structured candidates and reports that scan cap separately.
 
-- `Qwen/Qwen3-0.6B` for non-thinking routing and grounded answer phrasing.
+The optional local semantic-retrieval models are pinned to exact revisions:
+
+- `Qwen/Qwen3-0.6B` for non-thinking retrieval-mode routing.
 - `sentence-transformers/all-MiniLM-L6-v2` for small CPU sentence embeddings using
   the existing Transformers/PyTorch runtime directly.
 
@@ -32,11 +41,13 @@ CPU so it does not compete with SmolVLM/XCLIP for the laptop GPU. Set
 queries continue using the deterministic parser and SQLite. Override locations with
 `HACKHIVE_CHAT_MODEL_DIR` and `HACKHIVE_EMBEDDING_MODEL_DIR`.
 
-`GET /api/status` reports `not_configured`, `available`, `ready`, or `disabled`.
-`available` means the pinned provenance files exist; only `ready` means both adapters
-actually loaded. A load or malformed-routing failure falls back to deterministic
-behavior when the question has sufficient structured filters. No hosted inference,
-model-generated SQL, executable output, LangChain, or vector database is used.
+`GET /api/status` reports query-service `state=ready` when structured query and
+database retrieval are available; `semantic_models_state` separately reports
+`not_configured`, `available`, `ready`, or `disabled`. `available` means the pinned
+provenance files exist; only `ready` means both adapters actually loaded. A load or
+malformed-routing failure falls back to deterministic behavior when the question has
+sufficient structured filters. No hosted inference, model-generated SQL, executable
+output, LangChain, or vector database is used.
 
 Run the reproducible query evaluation after replacing each `null`
 `expected_event_ids` entry with labels from the database snapshot being tested:
@@ -298,10 +309,20 @@ npm run dev
 ```
 
 Start the FastAPI service first. Open http://127.0.0.1:5173 to use the React
-dashboard. The dashboard displays replay frames, candidate incidents, and evidence when local
-YOLO is ready. VLM confirmation, webcam/RTSP input, and validated event accuracy are
-still incomplete. A model ranking on any supplied clip is a pilot observation only;
-the six clips have no verified ground-truth annotations or held-out-camera coverage.
+dashboard. Query and timeline results share evidence cards with source, camera,
+video-offset interval, review and VLM state, and keyframe. The evidence drawer exposes
+the verification verdict, predicates, actual sampling strategy, and durable VLM-selected
+frames with source offsets. Playable event clips seek to the incident start while
+showing available and missing requested coverage. Replay timestamps are labeled as
+replay times, not original CCTV capture times. Replay events retain a video offset
+even if the recording filename was not associated with that session; the source is
+then shown as unavailable. Exact totals and readable filters are
+shown separately from semantic retrieval's bounded candidate scan.
+
+VLM confirmation remains advisory and requires human review; webcam/RTSP input and
+validated event accuracy are still incomplete. A model ranking on any supplied clip
+is a pilot observation only. The six clips have provisional labels and no held-out
+camera coverage.
 
 ## Label the supplied videos before evaluating
 

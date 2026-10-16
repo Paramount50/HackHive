@@ -91,7 +91,8 @@ CREATE TABLE IF NOT EXISTS cameras (
 CREATE TABLE IF NOT EXISTS stream_sessions (
  session_id TEXT PRIMARY KEY, camera_id TEXT NOT NULL REFERENCES cameras(camera_id),
  mode TEXT NOT NULL, started_utc_ms INTEGER NOT NULL, ended_utc_ms INTEGER,
- policy_version TEXT NOT NULL, policy_json TEXT NOT NULL, source_sha256 TEXT
+ policy_version TEXT NOT NULL, policy_json TEXT NOT NULL, source_sha256 TEXT,
+ source_name TEXT, recording_id TEXT
 );
 CREATE TABLE IF NOT EXISTS analysis_windows (
  window_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES stream_sessions(session_id),
@@ -129,7 +130,8 @@ CREATE TABLE IF NOT EXISTS media (
  kind TEXT NOT NULL, relative_path TEXT NOT NULL UNIQUE, mime_type TEXT NOT NULL,
  status TEXT NOT NULL, coverage_start_utc_ms INTEGER NOT NULL, coverage_end_utc_ms INTEGER NOT NULL,
  requested_start_utc_ms INTEGER NOT NULL, requested_end_utc_ms INTEGER NOT NULL,
- byte_size INTEGER, sha256 TEXT, expires_utc_ms INTEGER NOT NULL, failure_reason TEXT
+ byte_size INTEGER, sha256 TEXT, expires_utc_ms INTEGER NOT NULL, failure_reason TEXT,
+ analysis_window_id TEXT
 );
 CREATE TABLE IF NOT EXISTS reviews (
  review_seq INTEGER PRIMARY KEY AUTOINCREMENT, review_id TEXT NOT NULL UNIQUE,
@@ -159,6 +161,18 @@ class Store:
         self.connection = sqlite3.connect(path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.connection.executescript(SCHEMA)
+        session_columns = {
+            row["name"] for row in self.connection.execute("PRAGMA table_info(stream_sessions)")
+        }
+        if "source_name" not in session_columns:
+            self.connection.execute("ALTER TABLE stream_sessions ADD COLUMN source_name TEXT")
+        if "recording_id" not in session_columns:
+            self.connection.execute("ALTER TABLE stream_sessions ADD COLUMN recording_id TEXT")
+        media_columns = {
+            row["name"] for row in self.connection.execute("PRAGMA table_info(media)")
+        }
+        if "analysis_window_id" not in media_columns:
+            self.connection.execute("ALTER TABLE media ADD COLUMN analysis_window_id TEXT")
         self.connection.execute("PRAGMA journal_mode=WAL")
 
     def _mark_missing_media(self, event_id: str | None = None, media_id: str | None = None) -> None:
@@ -210,6 +224,8 @@ class Store:
         *,
         policy_version: str | None = None,
         policy_json: dict[str, Any] | None = None,
+        source_name: str | None = None,
+        recording_id: str | None = None,
     ) -> str:
         self.seed_camera()
         session_id = str(uuid.uuid4())
@@ -218,8 +234,8 @@ class Store:
         ).fetchone()
         self.connection.execute(
             """INSERT INTO stream_sessions
-            (session_id,camera_id,mode,started_utc_ms,policy_version,policy_json)
-            VALUES (?,?,?,?,?,?)""",
+            (session_id,camera_id,mode,started_utc_ms,policy_version,policy_json,source_name,recording_id)
+            VALUES (?,?,?,?,?,?,?,?)""",
             (
                 session_id,
                 "cam-1",
@@ -227,6 +243,8 @@ class Store:
                 started_utc_ms,
                 policy_version or policy["policy_version"],
                 json.dumps(policy_json) if policy_json is not None else policy["policy_json"],
+                source_name,
+                recording_id,
             ),
         )
         self.connection.commit()
@@ -396,6 +414,9 @@ class Store:
             "selection": result.get("selection"),
         }
         with self.connection:
+            self._persist_selected_frames(
+                job.event_id, job, result, window_id, event["session_started_utc_ms"]
+            )
             self.connection.execute(
                 """INSERT INTO analysis_windows
                 (window_id,session_id,start_utc_ms,end_utc_ms,frame_count,reason,status,model_outcome,
@@ -535,9 +556,14 @@ class Store:
     def get_event(self, event_id: str, *, include_media: bool = False) -> dict[str, Any] | None:
         self._mark_missing_media(event_id=event_id)
         row = self.connection.execute(
-            """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode
+            """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode,
+                      s.started_utc_ms AS session_started_utc_ms, s.source_name,
+                      s.recording_id, r.original_name AS recording_original_name,
+                      r.created_utc_ms AS recording_uploaded_utc_ms
                FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
-               JOIN cameras c ON c.camera_id=s.camera_id WHERE e.event_id=?""",
+               JOIN cameras c ON c.camera_id=s.camera_id
+               LEFT JOIN recordings r ON r.recording_id=s.recording_id
+               WHERE e.event_id=?""",
             (event_id,),
         ).fetchone()
         if row is None:
@@ -548,7 +574,9 @@ class Store:
         item["reviews"] = reviews
         item["predicates"] = json.loads(row["predicates_json"])
         item["limitations"] = json.loads(row["limitations_json"])
-        item["verification"] = self._verification_projection(event_id)
+        item["verification"] = self._verification_projection(
+            event_id, row["session_started_utc_ms"]
+        )
         item["candidate"] = self._candidate_projection(event_id)
         if include_media:
             item["media"] = [
@@ -559,9 +587,11 @@ class Store:
             ]
         return item
 
-    def _verification_projection(self, event_id: str) -> dict[str, Any]:
+    def _verification_projection(
+        self, event_id: str, session_started_utc_ms: int | None = None
+    ) -> dict[str, Any]:
         row = self.connection.execute(
-            """SELECT status,model_id,model_revision,prompt_version,observations_json,timings_json,error_code
+            """SELECT window_id,status,model_id,model_revision,prompt_version,observations_json,timings_json,error_code
                FROM analysis_windows
                WHERE reason='vlm_verification' AND window_id IN (
                  SELECT value FROM json_each((SELECT window_ids_json FROM events WHERE event_id=?))
@@ -572,6 +602,21 @@ class Store:
         if row is None:
             return {"status": "not_run", "verdict": None}
         payload = json.loads(row["observations_json"] or "{}")
+        selected_frames = [
+            {
+                "media_id": media["media_id"],
+                "source_pts_ms": max(0, media["coverage_start_utc_ms"] - session_started_utc_ms)
+                if session_started_utc_ms is not None else None,
+                "timestamp_utc_ms": media["coverage_start_utc_ms"],
+                "status": media["status"],
+            }
+            for media in self.connection.execute(
+                """SELECT media_id,coverage_start_utc_ms,status FROM media
+                   WHERE event_id=? AND kind='vlm_frame' AND analysis_window_id=?
+                   ORDER BY coverage_start_utc_ms,media_id""",
+                (event_id, row["window_id"]),
+            ).fetchall()
+        ]
         return {
             "status": row["status"],
             "verdict": payload.get("verdict"),
@@ -580,6 +625,7 @@ class Store:
             "prompt_version": row["prompt_version"],
             "observation": payload.get("observation"),
             "selection": payload.get("selection"),
+            "selected_frames": selected_frames,
             "timings_ms": json.loads(row["timings_json"] or "{}"),
             "error_code": row["error_code"],
             "error": payload.get("error"),
@@ -652,6 +698,67 @@ class Store:
         )
         self.connection.commit()
         return media_id
+
+    def _persist_selected_frames(
+        self, event_id: str, job: SemanticJob, result: dict[str, Any], window_id: str,
+        session_started_utc_ms: int,
+    ) -> None:
+        if self.media_root is None:
+            return
+        selection = result.get("selection")
+        if not isinstance(selection, dict):
+            return
+        selected_indices = selection.get("selected_indices")
+        selected_pts = selection.get("selected_source_pts_ms")
+        if not isinstance(selected_indices, list) or not isinstance(selected_pts, list):
+            raise ValueError("VLM selection metadata is missing frame indices or source timestamps")
+        if len(selected_indices) != len(selected_pts):
+            raise ValueError("VLM selection frame indices and timestamps differ in length")
+
+        from io import BytesIO
+        from PIL import Image
+        import hashlib
+
+        relative_dir = Path("events") / event_id / "vlm"
+        target_dir = (self.media_root / relative_dir).resolve()
+        if not target_dir.is_relative_to(self.media_root):
+            raise ValueError("VLM evidence path escapes the media root")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for order, (candidate_index, source_pts_ms) in enumerate(zip(selected_indices, selected_pts)):
+            if (
+                type(candidate_index) is not int or not 0 <= candidate_index < len(job.image_paths)
+                or type(source_pts_ms) is not int or source_pts_ms < 0
+            ):
+                raise ValueError("VLM selection contains an invalid frame index or timestamp")
+            encoded = BytesIO()
+            with Image.open(job.image_paths[candidate_index]) as image:
+                image.convert("RGB").save(encoded, format="JPEG", quality=90)
+            image_bytes = encoded.getvalue()
+            relative_path = relative_dir / f"{window_id}-{order:02d}.jpg"
+            destination = self.media_root / relative_path
+            destination.write_bytes(image_bytes)
+            digest = hashlib.sha256(image_bytes).hexdigest()
+            timestamp = session_started_utc_ms + source_pts_ms
+            self.connection.execute(
+                """INSERT INTO media
+                   (media_id,event_id,kind,relative_path,mime_type,status,
+                    coverage_start_utc_ms,coverage_end_utc_ms,requested_start_utc_ms,
+                    requested_end_utc_ms,byte_size,sha256,expires_utc_ms,analysis_window_id)
+                   VALUES (?,?, 'vlm_frame', ?, 'image/jpeg', 'ready', ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(relative_path) DO UPDATE SET
+                    status='ready',coverage_start_utc_ms=excluded.coverage_start_utc_ms,
+                    coverage_end_utc_ms=excluded.coverage_end_utc_ms,
+                    requested_start_utc_ms=excluded.requested_start_utc_ms,
+                    requested_end_utc_ms=excluded.requested_end_utc_ms,
+                    byte_size=excluded.byte_size,sha256=excluded.sha256,
+                    failure_reason=NULL,analysis_window_id=excluded.analysis_window_id""",
+                (
+                    str(uuid.uuid5(uuid.NAMESPACE_URL, f"{event_id}:{window_id}:{order}")),
+                    event_id, relative_path.as_posix(), timestamp, timestamp, timestamp,
+                    timestamp, len(image_bytes), digest, utc_now_ms() + 30 * 24 * 3600 * 1000,
+                    window_id,
+                ),
+            )
 
     def get_media(self, media_id: str) -> dict[str, Any] | None:
         self._mark_missing_media(media_id=media_id)
@@ -756,20 +863,9 @@ class Store:
         status = ReviewStatus.CONFIRMED if action == "confirm" else ReviewStatus.REJECTED
         return status, [dict(row) for row in rows]
 
-    def list_events(self, intent: QueryIntent) -> list[dict[str, Any]]:
-        self._mark_missing_media()
-        sql = """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode,
-                 (SELECT m.media_id FROM media m
-                  WHERE m.event_id=e.event_id AND m.kind='keyframe' AND m.status='ready'
-                  ORDER BY m.coverage_start_utc_ms,m.media_id LIMIT 1) AS thumbnail_media_id,
-                 EXISTS(SELECT 1 FROM media em WHERE em.event_id=e.event_id AND em.status='ready')
-                  AS has_ready_media,
-                 EXISTS(SELECT 1 FROM media km WHERE km.event_id=e.event_id
-                        AND km.kind='keyframe' AND km.status='ready') AS has_keyframe,
-                 EXISTS(SELECT 1 FROM media cm WHERE cm.event_id=e.event_id
-                        AND cm.kind='event_clip' AND cm.status='ready') AS has_clip
-                 FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
-                 JOIN cameras c ON c.camera_id=s.camera_id WHERE 1=1"""
+    @staticmethod
+    def _event_filters(intent: QueryIntent) -> tuple[str, list[Any]]:
+        sql = ""
         params: list[Any] = []
         if intent.categories:
             sql += f" AND e.category IN ({','.join('?' for _ in intent.categories)})"
@@ -777,6 +873,9 @@ class Store:
         if intent.camera_ids:
             sql += f" AND c.camera_id IN ({','.join('?' for _ in intent.camera_ids)})"
             params.extend(intent.camera_ids)
+        if intent.source_name:
+            sql += " AND (s.source_name=? OR r.original_name=? OR r.stored_name=?)"
+            params.extend([intent.source_name] * 3)
         if intent.decision_states:
             sql += f" AND e.decision_state IN ({','.join('?' for _ in intent.decision_states)})"
             params.extend(intent.decision_states)
@@ -804,10 +903,39 @@ class Store:
         if intent.end_utc_ms is not None:
             sql += " AND e.start_utc_ms < ?"
             params.append(intent.end_utc_ms)
+        if intent.start_pts_ms is not None:
+            sql += """ AND COALESCE(e.end_pts_ms,
+                         e.start_pts_ms + e.last_observed_utc_ms - e.start_utc_ms) >= ?"""
+            params.append(intent.start_pts_ms)
+        if intent.end_pts_ms is not None:
+            sql += " AND e.start_pts_ms < ?"
+            params.append(intent.end_pts_ms)
+        return sql, params
+
+    def list_events(self, intent: QueryIntent) -> list[dict[str, Any]]:
+        self._mark_missing_media()
+        sql = """SELECT e.*, c.camera_id, c.name AS camera_name, s.mode AS session_mode,
+                 s.started_utc_ms AS session_started_utc_ms, s.source_name,
+                 s.recording_id, r.original_name AS recording_original_name,
+                 r.created_utc_ms AS recording_uploaded_utc_ms,
+                 (SELECT m.media_id FROM media m
+                  WHERE m.event_id=e.event_id AND m.kind='keyframe' AND m.status='ready'
+                  ORDER BY m.coverage_start_utc_ms,m.media_id LIMIT 1) AS thumbnail_media_id,
+                 EXISTS(SELECT 1 FROM media em WHERE em.event_id=e.event_id AND em.status='ready')
+                  AS has_ready_media,
+                 EXISTS(SELECT 1 FROM media km WHERE km.event_id=e.event_id
+                        AND km.kind='keyframe' AND km.status='ready') AS has_keyframe,
+                 EXISTS(SELECT 1 FROM media cm WHERE cm.event_id=e.event_id
+                        AND cm.kind='event_clip' AND cm.status='ready') AS has_clip
+                 FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
+                 JOIN cameras c ON c.camera_id=s.camera_id
+                 LEFT JOIN recordings r ON r.recording_id=s.recording_id WHERE 1=1"""
+        filters, params = self._event_filters(intent)
+        sql += filters
         sql += " ORDER BY e.start_utc_ms DESC"
         if intent.operation == "list":
-            sql += " LIMIT ?"
-            params.append(intent.limit)
+            sql += " LIMIT ? OFFSET ?"
+            params.extend((intent.limit, intent.offset))
         result = []
         for row in self.connection.execute(sql, params).fetchall():
             review, reviews = self._review_projection(row["event_id"])
@@ -816,16 +944,55 @@ class Store:
             item["reviews"] = reviews
             item["predicates"] = json.loads(row["predicates_json"])
             item["limitations"] = json.loads(row["limitations_json"])
-            item["verification"] = self._verification_projection(row["event_id"])
+            item["verification"] = self._verification_projection(
+                row["event_id"], row["session_started_utc_ms"]
+            )
             item["candidate"] = self._candidate_projection(row["event_id"])
             result.append(item)
         return result
 
+    def count_events(self, intent: QueryIntent) -> int:
+        sql = """SELECT COUNT(*) FROM events e
+                 JOIN stream_sessions s ON s.session_id=e.session_id
+                 JOIN cameras c ON c.camera_id=s.camera_id
+                 LEFT JOIN recordings r ON r.recording_id=s.recording_id
+                 WHERE 1=1"""
+        filters, params = self._event_filters(intent)
+        sql += filters
+        return int(self.connection.execute(sql, params).fetchone()[0])
+
+    def group_events(self, intent: QueryIntent) -> dict[str, int]:
+        if intent.group_by == "camera":
+            group_expression = "c.name"
+        elif intent.group_by == "category":
+            group_expression = "e.category"
+        else:
+            raise ValueError("group query requires group_by")
+        sql = f"""SELECT {group_expression} AS group_name, COUNT(*) AS group_count
+                  FROM events e JOIN stream_sessions s ON s.session_id=e.session_id
+                  JOIN cameras c ON c.camera_id=s.camera_id
+                  LEFT JOIN recordings r ON r.recording_id=s.recording_id
+                  WHERE 1=1"""
+        filters, params = self._event_filters(intent)
+        sql += f"{filters} GROUP BY {group_expression} ORDER BY group_name"
+        return {
+            row["group_name"]: int(row["group_count"])
+            for row in self.connection.execute(sql, params).fetchall()
+        }
+
     def review(self, event_id: str, request: ReviewRequest) -> dict[str, Any]:
         existing = self.connection.execute(
-            "SELECT review_id FROM reviews WHERE request_key=?", (request.request_key,)
+            "SELECT review_id,event_id,action,actor_label,note FROM reviews WHERE request_key=?",
+            (request.request_key,),
         ).fetchone()
-        if not existing:
+        if existing and (
+            existing["event_id"] != event_id
+            or existing["action"] != request.action
+            or existing["actor_label"] != request.actor_label
+            or existing["note"] != request.note
+        ):
+            raise ValueError("request_key was already used for a different review action")
+        if existing is None:
             self.connection.execute(
                 """INSERT INTO reviews
                 (review_id,request_key,event_id,action,actor_label,note,created_utc_ms)
