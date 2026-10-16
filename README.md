@@ -315,8 +315,13 @@ record only clear event intervals or confirmed-normal footage:
 ```
 
 Use `s` for an ambiguous clip rather than labeling it normal. Keep all windows from a
-source in the same split. Six short clips are only a pilot set; do not claim robust
-accuracy or deployment readiness from them.
+source in the same split. The labeling tool covers the integrated person-down, crowd,
+tailgating, and aggression categories; experimental fire/smoke and restricted-area
+intrusion are excluded. Byte-identical source files are skipped, and manifest
+validation rejects identical content recorded under different source IDs, preventing
+duplicate clips from leaking across splits or inflating the sample count. Six short
+clips are only a pilot set; do not claim robust accuracy or deployment readiness
+from them.
 
 ## Evaluation
 

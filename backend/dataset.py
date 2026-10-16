@@ -55,12 +55,24 @@ def validate_manifest(entries: list[ManifestEntry]) -> dict[str, Any]:
 
     source_splits: dict[str, set[str]] = defaultdict(set)
     source_hashes: dict[str, set[str]] = defaultdict(set)
+    hash_sources: dict[str, set[str]] = defaultdict(set)
     for entry in entries:
         source_splits[entry.source_id].add(entry.split)
         source_hashes[entry.source_id].add(entry.source_sha256)
+        hash_sources[entry.source_sha256].add(entry.source_id)
     leaked = sorted(source for source, splits in source_splits.items() if len(splits) > 1)
     if leaked:
         raise ValueError(f"source leakage across splits: {', '.join(leaked)}")
+    duplicate_content = sorted(
+        ", ".join(sorted(source_ids))
+        for source_ids in hash_sources.values()
+        if len(source_ids) > 1
+    )
+    if duplicate_content:
+        raise ValueError(
+            "identical source content appears under multiple source IDs: "
+            + "; ".join(duplicate_content)
+        )
     inconsistent = sorted(source for source, hashes in source_hashes.items() if len(hashes) > 1)
     if inconsistent:
         raise ValueError(f"inconsistent source hash: {', '.join(inconsistent)}")

@@ -14,6 +14,14 @@ if __package__ in {None, ""}:
 from backend.contracts import Category
 
 
+LABEL_CATEGORIES = {
+    Category.PERSON_DOWN,
+    Category.CROWD_GATHERING,
+    Category.SUSPECTED_TAILGATING,
+    Category.AGGRESSION_FIGHT,
+}
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -52,20 +60,22 @@ def main() -> int:
     if not videos:
         parser.error(f"no supported videos found in {args.videos}")
 
-    valid_categories = {category.value for category in Category
-                        if category in {
-                            Category.PERSON_DOWN,
-                            Category.CROWD_GATHERING,
-                            Category.SUSPECTED_TAILGATING,
-                        }}
+    valid_categories = {category.value for category in LABEL_CATEGORIES}
     entries = []
+    seen_sources: dict[str, Path] = {}
     for path in videos:
+        source_hash = file_sha256(path)
+        duplicate = seen_sources.get(source_hash)
+        if duplicate is not None:
+            print(f"\nSkipping byte-identical duplicate {path.name} (same as {duplicate.name}).")
+            continue
+        seen_sources[source_hash] = path
+
         duration_ms = video_duration_ms(path)
         print(f"\nReview this complete clip in a video player: {path.resolve()}")
         split = input("Split (train/validation/test; keep all windows from this source together): ").strip()
         while split not in {"train", "validation", "test"}:
             split = input("Enter train, validation, or test: ").strip()
-        source_hash = file_sha256(path)
         source_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", path.stem)[:100]
         interval_count_text = input(
             "Number of clear labeled intervals (0 = entire clip is a confirmed negative, "

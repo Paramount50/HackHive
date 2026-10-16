@@ -395,7 +395,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | ID | Owner | Priority | Task | Depends on | Status | Acceptance evidence to attach |
 |---|---|---|---|---|---|---|
 | T01 | A | P0 | Hardware budget and local four-frame smoke test | — | IN_PROGRESS | GPU is available; 20-request smoke returned 18 valid JSON outputs, all `unknown`; no quality result |
-| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | Manifest validator and labeling CLI added; actual labels, source rights/provenance, and splits still to collect |
+| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | Labeling CLI covers integrated categories including aggression and skips byte-identical files; manifest validation rejects duplicate content under different source IDs; actual labels, source rights/provenance, and splits still to collect |
 | T03 | B | P0 | SQLite/API skeleton and validated contracts | — | DONE | `backend/storage.py`, `backend/contracts.py`, `backend/main.py`; `pytest -q` passes 5 tests covering unknown outcomes, merge deduplication, idempotent review, time filtering, fixture API and citations |
 | T04 | B | P0 | Paced replay/webcam, timestamps, ring buffer | T03 | IN_PROGRESS | Real replay runs in a bounded background worker; frames now reach the detector/event/media callback; webcam remains pending |
 | T05 | A | P0 | CPU detection/tracking and temporal candidates | T04 | IN_PROGRESS | YOLO11n weights and Ultralytics are present; detection runs on sampled frames, but per-class event quality and ByteTrack comparison remain unvalidated |
