@@ -69,3 +69,6 @@ weights/
 # OS / temporary files
 .DS_Store
 Thumbs.db
+
+
+sample_videos/
