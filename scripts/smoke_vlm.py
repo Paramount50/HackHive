@@ -11,10 +11,77 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.inference.hardware import hardware_report
 from backend.inference.contracts import VisualObservation, verification_verdict
 from backend.inference.smolvlm import SmolVLMWorker, model_config
+
+
+CODE_SOURCE_FILES = (
+    Path("scripts/smoke_vlm.py"),
+    Path("backend/inference/contracts.py"),
+    Path("backend/inference/smolvlm.py"),
+    Path("backend/inference/hardware.py"),
+    Path("backend/inference/swift_sampling.py"),
+)
+
+
+def code_provenance(root: Path | None = None) -> dict:
+    project_root = (root or Path(__file__).resolve().parents[1]).resolve()
+    source_sha256 = {}
+    for relative_path in CODE_SOURCE_FILES:
+        path = project_root / relative_path
+        with path.open("rb") as source:
+            source_sha256[relative_path.as_posix()] = hashlib.file_digest(
+                source, "sha256"
+            ).hexdigest()
+
+    try:
+        revision_result = subprocess.run(
+            ["git", "-C", str(project_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if revision_result.returncode == 0:
+            revision = revision_result.stdout.strip()
+            revision_error = None
+        else:
+            revision = None
+            revision_error = revision_result.stderr.strip()[:500] or (
+                f"git rev-parse exited with {revision_result.returncode}"
+            )
+
+        status_result = subprocess.run(
+            ["git", "-C", str(project_root), "status", "--porcelain", "--", *(
+                path.as_posix() for path in CODE_SOURCE_FILES
+            )],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if status_result.returncode == 0:
+            source_files_dirty = bool(status_result.stdout.strip())
+            status_error = None
+        else:
+            source_files_dirty = None
+            status_error = status_result.stderr.strip()[:500] or (
+                f"git status exited with {status_result.returncode}"
+            )
+    except OSError as exc:
+        revision = None
+        revision_error = f"{type(exc).__name__}: {exc}"[:500]
+        source_files_dirty = None
+        status_error = revision_error
+
+    return {
+        "git_revision": revision,
+        "git_revision_error": revision_error,
+        "source_files_dirty": source_files_dirty,
+        "git_status_error": status_error,
+        "source_sha256": source_sha256,
+    }
 
 
 def sample_window(path: Path, fraction: float):
@@ -86,6 +153,23 @@ def main():
         parser.error("no video files found")
     output = args.output or Path("reports") / datetime.now(timezone.utc).strftime("vlm-%Y%m%dT%H%M%SZ")
     output.mkdir(parents=True, exist_ok=False)
+    run_configuration = {
+        "model_variant": args.model,
+        "model_id": config.model_id,
+        "model_revision": config.revision,
+        "candidate_category": args.candidate,
+        "requested": args.requests,
+        "max_new_tokens": args.max_new_tokens,
+        "constrained_json": not args.unconstrained,
+        "sources": sorted(path.name for path in videos),
+    }
+    (output / "run_config.json").write_text(
+        json.dumps(run_configuration, indent=2), encoding="utf-8"
+    )
+    source_provenance = code_provenance()
+    (output / "code_provenance.json").write_text(
+        json.dumps(source_provenance, indent=2), encoding="utf-8"
+    )
     rounds = max(1, math.ceil(args.requests / len(videos)))
     if args.window_manifest and args.window_manifest.is_file():
         window_specs = json.loads(args.window_manifest.read_text(encoding="utf-8"))
@@ -169,6 +253,9 @@ def main():
     summary = {"mode": "candidate_verification" if args.candidate else "offline_smoke",
                "variant": args.model, "model_id": config.model_id,
                "revision": config.revision, "candidate_category": args.candidate,
+               "constrained_json": not args.unconstrained,
+               "run_configuration": run_configuration,
+               "code_provenance": source_provenance,
                "requested": args.requests, "attempted": len(results),
                "valid_outputs": valid, "failed_outputs": len(results)-valid,
                "valid_output_rate": valid/len(results) if results else None,

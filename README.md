@@ -105,6 +105,10 @@ response retained. Out-of-range, malformed, empty, or oversized references are
 rejected, never clamped or removed; constrained decoding does not replace downstream validation. Candidate
 summaries are deliberately limited to one concise sentence rather than relying
 on a larger generation budget.
+Each report records whether constrained JSON decoding was enabled, the Git
+revision when available, and SHA256 fingerprints for the smoke script and
+inference sources. Check `run_config.json` and `code_provenance.json` before
+interpreting a remote run, especially when notebook files were copied manually.
 
 For a fair structural/performance comparison, create and reuse one deterministic
 window manifest:
@@ -308,14 +312,13 @@ record only clear event intervals or confirmed-normal footage:
 ```powershell
 .\.venv\Scripts\python.exe scripts\label_videos.py `
   --videos ..\sample_videos `
-  --output evaluation\sample_manifest.jsonl `
-  --provenance "<record how the source was obtained>" `
-  --license "<record the permission/license basis>"
+  --output evaluation\sample_manifest.jsonl
 .\.venv\Scripts\python.exe scripts\validate_manifest.py evaluation\sample_manifest.jsonl
 ```
 
-Use `s` for an ambiguous clip rather than labeling it normal. Keep all windows from a
-source in the same split. The labeling tool covers the integrated person-down, crowd,
+The tool asks for provenance and permission/license basis separately for each unique
+source; do not guess or reuse a global answer when sources differ. Use `s` for an
+ambiguous clip rather than labeling it normal. Keep all windows from a source in the same split. The labeling tool covers the integrated person-down, crowd,
 tailgating, and aggression categories; experimental fire/smoke and restricted-area
 intrusion are excluded. Byte-identical source files are skipped, and manifest
 validation rejects identical content recorded under different source IDs, preventing

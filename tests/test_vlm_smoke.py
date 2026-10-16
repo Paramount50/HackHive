@@ -6,7 +6,16 @@ from backend.inference.smolvlm import (
     SmolVLMWorker, candidate_prompt, model_config, validate_provenance,
     vision_sampling_compatibility,
 )
-from scripts.smoke_vlm import sample_window
+from scripts.smoke_vlm import CODE_SOURCE_FILES, code_provenance, sample_window
+
+
+def test_smoke_report_records_revision_and_source_fingerprints():
+    provenance = code_provenance()
+
+    assert len(provenance["source_sha256"]) == len(CODE_SOURCE_FILES)
+    assert all(len(digest) == 64 for digest in provenance["source_sha256"].values())
+    assert provenance["git_revision"] or provenance["git_revision_error"]
+    assert isinstance(provenance["source_files_dirty"], bool) or provenance["git_status_error"]
 
 
 def test_sampling_four_distinct_frames_preserves_source_order(tmp_path):

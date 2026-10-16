@@ -46,12 +46,17 @@ def video_duration_ms(path: Path) -> int:
         capture.release()
 
 
+def required_metadata(prompt: str) -> str:
+    while True:
+        value = input(prompt).strip()
+        if value:
+            return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--videos", type=Path, default=Path("..") / "sample_videos")
     parser.add_argument("--output", type=Path, default=Path("evaluation") / "sample_manifest.jsonl")
-    parser.add_argument("--provenance", required=True, help="How these videos were obtained")
-    parser.add_argument("--license", required=True, help="Rights/permission basis for using the videos")
     args = parser.parse_args()
     if not args.videos.is_dir():
         parser.error(f"video directory does not exist: {args.videos}")
@@ -73,6 +78,10 @@ def main() -> int:
 
         duration_ms = video_duration_ms(path)
         print(f"\nReview this complete clip in a video player: {path.resolve()}")
+        provenance = required_metadata("Source provenance (where/how this video was obtained): ")
+        license_basis = required_metadata(
+            "Rights/license basis for this specific video: "
+        )
         split = input("Split (train/validation/test; keep all windows from this source together): ").strip()
         while split not in {"train", "validation", "test"}:
             split = input("Enter train, validation, or test: ").strip()
@@ -118,8 +127,8 @@ def main() -> int:
                 "start_ms": start_ms,
                 "end_ms": end_ms,
                 "categories": categories,
-                "provenance": args.provenance,
-                "license": args.license,
+                "provenance": provenance,
+                "license": license_basis,
                 "notes": notes,
             })
 

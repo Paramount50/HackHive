@@ -63,6 +63,32 @@ def test_candidate_schema_is_fixed_to_the_expected_category():
     ]["items"]["enum"] == [0, 1, 2, 3]
 
 
+def test_lmfe_candidate_schema_forces_contract_order_and_local_indices():
+    lmfe = pytest.importorskip("lmformatenforcer")
+    from lmformatenforcer.characterlevelparser import CharacterLevelParserConfig
+
+    parser = lmfe.JsonSchemaParser(
+        generation_schema("aggression_fight"),
+        config=CharacterLevelParserConfig(
+            force_json_field_order=True,
+            max_consecutive_whitespaces=2,
+        ),
+    )
+    prefix = (
+        '{"outcome":"aggression_fight","summary":"visible altercation",'
+        '"evidence":{"aggressive_motion":true,"multiple_people_visible":true,'
+        '"physical_contact":true,"temporal_persistence":true},'
+        '"evidence_frames":{"aggressive_motion":['
+    )
+    for character in prefix:
+        assert character in parser.get_allowed_characters()
+        parser = parser.add_character(character)
+
+    assert set("0123").issubset(parser.get_allowed_characters())
+    parser = parser.add_character("1")
+    assert "0" not in parser.get_allowed_characters()
+
+
 def test_candidate_parser_requires_every_predicate_and_preserves_null():
     raw = json.dumps({
         "outcome": "aggression_fight",

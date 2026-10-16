@@ -395,7 +395,7 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | ID | Owner | Priority | Task | Depends on | Status | Acceptance evidence to attach |
 |---|---|---|---|---|---|---|
 | T01 | A | P0 | Hardware budget and local four-frame smoke test | — | IN_PROGRESS | GPU is available; 20-request smoke returned 18 valid JSON outputs, all `unknown`; no quality result |
-| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | Labeling CLI covers integrated categories including aggression and skips byte-identical files; manifest validation rejects duplicate content under different source IDs; actual labels, source rights/provenance, and splits still to collect |
+| T02 | C | P0 | Safe fixtures, labels, split manifest | — | IN_PROGRESS | Labeling CLI covers integrated categories including aggression, collects provenance/license per unique source, and skips byte-identical files; manifest validation rejects duplicate content under different source IDs; actual labels, source rights/provenance, and splits still to collect |
 | T03 | B | P0 | SQLite/API skeleton and validated contracts | — | DONE | `backend/storage.py`, `backend/contracts.py`, `backend/main.py`; `pytest -q` passes 5 tests covering unknown outcomes, merge deduplication, idempotent review, time filtering, fixture API and citations |
 | T04 | B | P0 | Paced replay/webcam, timestamps, ring buffer | T03 | IN_PROGRESS | Real replay runs in a bounded background worker; frames now reach the detector/event/media callback; webcam remains pending |
 | T05 | A | P0 | CPU detection/tracking and temporal candidates | T04 | IN_PROGRESS | YOLO11n weights and Ultralytics are present; detection runs on sampled frames, but per-class event quality and ByteTrack comparison remain unvalidated |
@@ -424,6 +424,20 @@ Documentation verification after the meeting update: all twelve Markdown files e
 | Alert p50/p95 and missed-event count | Not measured |
 | Peak memory and missed audit deadlines | Latest integrated XCLIP + 500M replay: 3716 MiB total GPU memory used, 2279 MiB free, PyTorch peak allocation 1933.6 MiB; audit deadlines not measured |
 | Chat exact-match and citation validity | Not measured |
+
+Kaggle 2.2B candidate smoke follow-up — 2026-10-16: the user-shared
+`aggression_fight` run loaded SmolVLM2-2.2B but produced 0/3 structurally valid
+measured responses. The shared output reports normal EOS completion, about
+11.1 seconds/request, and 4712.56 MiB peak PyTorch allocation; one supplied raw
+response cited frame `10` four times, outside the allowed local indices `0..3`.
+The shared validation message says duplicate citations, whereas the current parser
+checks bounds before duplicates; its generated property order also differs from
+the current constrained schema. The exact Kaggle revision and whether
+`--unconstrained` was used have not been established, so this is a code/runtime
+provenance discrepancy, not evidence to weaken local citation validation. Smoke
+reports now save `code_provenance.json`, constrained-decoding mode, Git revision
+when available, and hashes of inference sources to make the next rerun attributable.
+This 2.2B candidate smoke remains failed pending a rerun on confirmed current code.
 
 ## Decision/change log
 
