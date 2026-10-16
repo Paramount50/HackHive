@@ -223,7 +223,14 @@ class Store:
              now, decision, "active", analysis.summary, score,
              "evidence_completeness_v1", json.dumps(predicates), "[]", json.dumps([window_id]),
              policy["policy_version"], policy["policy_json"],
-             "unknown" if outcome == Category.SUSPECTED_TAILGATING else "not_applicable",
+             (
+                 "unknown"
+                 if outcome in {
+                     Category.SUSPECTED_TAILGATING,
+                     Category.INTRUSION_UNAUTHORIZED_ACCESS,
+                 }
+                 else "not_applicable"
+             ),
              (
                  "simulated"
                  if outcome == Category.SUSPECTED_TAILGATING and analysis.model_id.startswith("fixture://")

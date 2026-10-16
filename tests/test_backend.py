@@ -171,6 +171,21 @@ def test_visual_tailgating_candidate_does_not_claim_simulated_access_evidence() 
     assert event["access_evidence_source"] is None
 
 
+def test_visual_intrusion_candidate_keeps_authorization_unknown() -> None:
+    store = make_store()
+    session_id = store.create_session(1_000)
+    candidate = FixtureAnalysis(
+        outcome="intrusion_unauthorized_access",
+        summary="A person crossed a configured restricted boundary.",
+        model_id="candidate://cpu-rules",
+        observations=[{"predicate": "restricted_boundary_crossing", "supported": True}],
+    )
+    event_id = store.record_analysis(session_id, 2_000, 3_000, candidate, "visual-only-intrusion")
+    event = store.get_event_row(event_id)
+    assert event["authorization_state"] == "unknown"
+    assert event["access_evidence_source"] is None
+
+
 def test_api_fixture_and_citations() -> None:
     from backend import main
 

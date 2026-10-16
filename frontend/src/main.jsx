@@ -223,7 +223,7 @@ function EvidenceDrawer({ event, onClose }) {
       <dl>
         <dt>System prediction</dt><dd>{event.decision_state}</dd>
         <dt>Human review</dt><dd>{event.review_status}</dd>
-        <dt>Authorization</dt><dd>{event.authorization_state} · {event.access_evidence_source ?? "visual evidence only"}</dd>
+        <dt>Authorization</dt><dd>{event.authorization_state} · {event.access_evidence_source ?? "no policy/access evidence"}</dd>
         <dt>Evidence score</dt><dd>{Math.round(event.confidence_score * 4)}/4 · uncalibrated</dd>
       </dl>
       <h3>Limitations</h3>

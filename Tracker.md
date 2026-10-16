@@ -263,6 +263,15 @@ cover both the tolerated-miss and upright-reset paths. Verification:
 `python -m pytest -q` completed with 136 passed and one Starlette deprecation
 warning. This is deterministic rule coverage, not measured person-down recall.
 
+Intrusion authorization semantics — 2026-10-16: the compatible API category
+identifier remains `intrusion_unauthorized_access`, while its UI label remains
+“Possible restricted-area intrusion.” Visual-only intrusion events now persist
+authorization as `unknown`, and the evidence drawer reports that no
+policy/access evidence exists instead of implying visual authorization.
+Verification: `python -m pytest -q` completed with 137 passed and one warning;
+the Vite production build completed successfully. No intrusion candidate
+generator or authorization integration is claimed.
+
 Status values: `TODO`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `CUT`. An item becomes DONE only when its acceptance evidence is linked. Owners A/B/C are placeholders defined in [ImplementationPlan.md](ImplementationPlan.md).
 
 Only A has GPU access. See [TeamAssignments.md](TeamAssignments.md) for CPU-only development and handoffs, and [MeetingDecisions.md](MeetingDecisions.md) for organizer-reference decisions. GPU smoke and local CPU detector runs exist, but no measured accuracy claim is supported.
